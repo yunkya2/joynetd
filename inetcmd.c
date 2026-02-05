@@ -614,11 +614,18 @@ int do_psocket(long *arg)
 
 // ---------------------------------------------------------------------------
 
-int do_command(int cmd, long *arg)
+int do_command(void)
 {
-    PRINTF("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
+    int cmd;
+    long *arg;
 
-    _dos_super(0);
+    __asm__ volatile (
+        "move.l %%d0,%0\n"
+        "move.l %%a0,%1\n"
+        : "=r" (cmd), "=r" (arg) : : "d0", "a0"
+    );
+
+    PRINTF("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
 
     switch (cmd) {
     case -1:        // trap番号の取得

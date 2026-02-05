@@ -32,15 +32,13 @@ tcpip_magic:
     .ascii  "TCP/IP\x02\x00"
 
 jsr_entry:
-    movem.l %d0/%a0,%sp@-
-    jsr     do_command
-    addq.l  #8,%sp
+    pea.l   %pc@(do_command)
+    .word   0xfff6              // DOS _SUPER_JSR
+    addq.l  #4,%sp
     rts
 
 trap_entry:
-    movem.l %d0/%a0,%sp@-
-    jsr     do_command
-    addq.l  #8,%sp
+    bsr     do_command
     rte
 
 
