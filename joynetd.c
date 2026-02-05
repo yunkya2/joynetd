@@ -32,10 +32,7 @@
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
 
-#include "tcpipdrv.h"
-#include "w5500.h"
-
-#include "inetetc.h"
+#include "joynetd.h"
 
 //****************************************************************************
 // Macros and definitions
@@ -180,36 +177,21 @@ int main(int argc, char **argv)
 
     w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
 
-#if 1
     if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
         _dos_print("イーサネットじょい君が接続されていません\r\n");
         w5500_fin();
         return 1;
     }
-#endif
-
-#if 0
-    for (int i = 0; i < 0x40; i++) {
-        if (i % 16 == 0) {
-            printf("\n%02x:", i);
-        }
-        printf(" %02x", w5500_read_b(i, 0));
-    }
-    printf("\n");
-#endif
-    w5500_fin();
 
     init_etc_files();
-
-    void configure(void);
-    configure();
+    read_config();
 
     joynetd_data.memblock = _dos_getpdb();
 
     prev = find_devheader(NULL);
     prev->next = &devheader;
 
-    _dos_print("joynetd を常駐しました\r\n");
+    _dos_print("joynetd が常駐しました\r\n");
 
     _dos_keeppr(0xffffff, 0);  // ヒープ領域の末尾までを常駐
 }

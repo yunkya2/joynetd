@@ -38,9 +38,6 @@
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
 
-//#include "tcpipdrv.h"
-//#include "w5500.h"
-
 #include "joynetd.h"
 
 //****************************************************************************

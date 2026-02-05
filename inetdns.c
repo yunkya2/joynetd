@@ -36,23 +36,10 @@
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
 
-#include "tcpipdrv.h"
-#include "w5500.h"
-
 #include "joynetd.h"
 
 //****************************************************************************
 // Macros and definitions
-//****************************************************************************
-
-//****************************************************************************
-// Global variables
-//****************************************************************************
-
-extern uint8_t w5500_dns[4];
-
-//****************************************************************************
-// Private functions
 //****************************************************************************
 
 #define DNS_PORT 53
@@ -74,6 +61,27 @@ typedef struct {
     unsigned short class;
 } DNSQuestion;
 
+//****************************************************************************
+// Global variables
+//****************************************************************************
+
+extern uint8_t w5500_dns[4];
+
+//****************************************************************************
+// Private functions
+//****************************************************************************
+
+static inline unsigned int duration(struct iocs_time *t0)
+{
+    struct iocs_time now = _iocs_ontime();
+
+    return (now.sec - t0->sec) +
+           (now.day - t0->day) * 24 * 60 * 60 * 100;
+}
+
+//****************************************************************************
+// Public functions
+//****************************************************************************
 
 int do_res_query(char *dname, int class, int type, unsigned char *answer, int anslen)
 {
@@ -158,14 +166,6 @@ int do_res_mkquery(int op, char *dname, int class, int type, char *data, int dat
     // TBD: data, datalen
 
     return (char *)q - (char *)buf;
-}
-
-static inline unsigned int duration(struct iocs_time *t0)
-{
-    struct iocs_time now = _iocs_ontime();
-
-    return (now.sec - t0->sec) +
-           (now.day - t0->day) * 24 * 60 * 60 * 100;
 }
 
 int do_res_send(char *msg, int msglen, char *answer, int anslen)

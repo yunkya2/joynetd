@@ -37,8 +37,6 @@
 #include <x68k/iocs.h>
 
 #include "tcpipdrv.h"
-#include "w5500.h"
-
 #include "joynetd.h"
 
 //****************************************************************************
@@ -99,120 +97,6 @@ static int current_eph_port = EPH_PORT_BEGIN;
 // Private functions
 //****************************************************************************
 
-//////////////////////////////////////////////////////////////////////////////
-
-static int first = 1;
-
-static uint8_t w5500_mac[6];
-static uint8_t w5500_gw[4];
-static uint8_t w5500_sm[4];
-static uint8_t w5500_sip[4];
-
-uint8_t w5500_dns[4];
-
-//////////////////////////////////////////////////////////////////////////////
-
-void configure(void)
-{
-    if (first) {
-        first = 0;
-
-        w5500_ini();
-
-        FILE *fp;
-        char cfgname[256];
-        struct dos_psp *psp = _dos_getpdb ();
-
-        strcpy(cfgname, psp->exe_path);
-        strcat(cfgname, "joynetd.cfg");
-        if ((fp = fopen(cfgname, "r")) != NULL) {
-            char line[256];
-            char *p;
-            char *q;
-            while (fgets(line, sizeof(line), fp) != NULL) {
-                if (strncmp(line, "mac=", 4) == 0) {
-                    p = &line[4];
-                    for (int i = 0; i < 6; i++) {
-                        w5500_mac[i] = strtoul(p, &q, 16);
-                        p = q + 1;
-                    }
-                } else if (strncmp(line, "ip=", 3) == 0) {
-                    p = &line[3];
-                    for (int i = 0; i < 4; i++) {
-                        w5500_sip[i] = strtoul(p, &q, 0);
-                        p = q + 1;
-                    }
-                } else if (strncmp(line, "mask=", 5) == 0) {
-                    p = &line[5];
-                    for (int i = 0; i < 4; i++) {
-                        w5500_sm[i] = strtoul(p, &q, 0);
-                        p = q + 1;
-                    }
-                } else if (strncmp(line, "gw=", 3) == 0) {
-                    p = &line[3];
-                    for (int i = 0; i < 4; i++) {
-                        w5500_gw[i] = strtoul(p, &q, 0);
-                        p = q + 1;
-                    }
-                } else if (strncmp(line, "dns=", 4) == 0) {
-                    p = &line[4];
-                    for (int i = 0; i < 4; i++) {
-                        w5500_dns[i] = strtoul(p, &q, 0);
-                        p = q + 1;
-                    }
-                }
-            }
-            fclose(fp);
-        }
-        printf("MAC: ");
-        for (int i = 0; i < 6; i++) {
-            printf("%02x%s", w5500_mac[i], i < 5 ? ":" : "");
-        }
-        printf("\n");
-
-        printf("IP: ");
-        for (int i = 0; i < 4; i++) {
-            printf("%d%s", w5500_sip[i], i < 3 ? "." : "");
-        }
-        printf("\n");
-
-        printf("netmask: ");
-        for (int i = 0; i < 4; i++) {
-            printf("%d%s", w5500_sm[i], i < 3 ? "." : "");
-        }
-        printf("\n");
-
-        printf("gateway: ");
-        for (int i = 0; i < 4; i++) {
-            printf("%d%s", w5500_gw[i], i < 3 ? "." : "");
-        }
-        printf("\n");
-
-        printf("DNS: ");
-        for (int i = 0; i < 4; i++) {
-            printf("%d%s", w5500_dns[i], i < 3 ? "." : "");
-        }
-        printf("\n");
-
-        for (int i = 0; i < 0x40; i += 0x10) {
-            uint8_t data[16];
-            w5500_read(i, 0, data, 16);
-            for (int j = 0; j < 16; j++) {
-                PRINTF(" %02x", data[j]);
-            }
-            PRINTF("\n");
-        }
-        PRINTF("\n");
-
-        w5500_write(W5500_SHAR, 0, w5500_mac, 6);
-        w5500_write(W5500_GAR, 0, w5500_gw, 4);
-        w5500_write(W5500_SUBR, 0, w5500_sm, 4);
-        w5500_write(W5500_SIPR, 0, w5500_sip, 4);
-    }
-}
-
-//****************************************************************************
-
 static inline unsigned int duration(struct iocs_time *t0)
 {
     struct iocs_time now = _iocs_ontime();
@@ -233,6 +117,24 @@ static int wait_status(int blk_sreg, uint8_t status)
     return -1;
 }
 
+static int wait_data(int blk_sreg, int reg, int status)
+{
+    int len;
+
+    do {
+        len = w5500_read_w(reg, blk_sreg);
+#ifdef DEBUG
+        PRINTF("%d ", len); fflush(stdout);
+#endif
+        if (w5500_read_b(W5500_Sn_SR, blk_sreg) != status) {
+            PRINTF("socket closed during read\n");
+            return -1;
+        }
+    } while (len == 0);
+    PRINTF("\n");
+    return len;
+}
+
 static inline int validate_sockfd(int sockfd)
 {
     if (sockfd < SOCKBASE || sockfd >= SOCKBASE + W5500_N_SOCKETS) {
@@ -247,14 +149,13 @@ static inline int validate_sockfd(int sockfd)
     return sockfd;
 }
 
-// ---------------------------------------------------------------------------
+//****************************************************************************
+// Public functions
+//****************************************************************************
 
 int do_socket(int domain, int type, int protocol)
 {
     PRINTF("joynetd: socket(%d, %d, %d)\n", domain, type, protocol);
-
-//    w5500_write_b(W5500_Sn_RXBUF_SIZE, 1, 4); // buffer size
-//    w5500_write_b(W5500_Sn_TXBUF_SIZE, 1, 4); // buffer size
 
     for (int i = 0; i < W5500_N_SOCKETS; i++) {
         usock *u = &usock_array[i];
@@ -380,13 +281,10 @@ ssize_t do_read(int sockfd, void *buf, size_t count)
     int blk_rxbuf = sno * 4 + 3;
 
     PRINTF("  Sn_RX_RSR=");
-    int len;
-    do {
-        len = w5500_read_w(W5500_Sn_RX_RSR, blk_sreg);
-        PRINTF("%d ", len);fflush(stdout);
-    } while (len == 0);
-    PRINTF("\n");
-
+    int len = wait_data(blk_sreg, W5500_Sn_RX_RSR, W5500_Sn_SR_ESTABLISHED);
+    if (len < 0) {
+        return -1;
+    }
     len = (count < len) ? count : len;
 
     int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
@@ -413,12 +311,12 @@ ssize_t do_write(int sockfd, const void *buf, size_t count)
     ssize_t written = 0;
 
     while (count > 0) {
-        size_t free;
-        do {
-            free = w5500_read_w(W5500_Sn_TX_FSR, blk_sreg);
-            PRINTF("  Sn_TX_FSR=%lu\n", free);
-        } while (free == 0);
-        size_t len = (count < free) ? count : free;
+        PRINTF("  Sn_TX_FSR=");
+        int len = wait_data(blk_sreg, W5500_Sn_TX_FSR, W5500_Sn_SR_ESTABLISHED);
+        if (len < 0) {
+            return -1;
+        }
+        len = (count < len) ? count : len;
 
         int ptr = w5500_read_w(W5500_Sn_TX_WR, blk_sreg);
         PRINTF("  Sn_TX_WR=0x%x\n", ptr);
@@ -449,12 +347,11 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
     usock *u = &usock_array[sno];
 
     PRINTF("  Sn_RX_RSR=");
-    int bytes;
-    do {
-        bytes = w5500_read_w(W5500_Sn_RX_RSR, blk_sreg);
-        PRINTF("%d ", bytes);fflush(stdout);
-    } while (bytes == 0);
-    PRINTF("\n");
+    int bytes = wait_data(blk_sreg, W5500_Sn_RX_RSR,
+                          u->type == SOCK_DGRAM + 1 ? W5500_Sn_SR_UDP : W5500_Sn_SR_IPRAW);
+    if (bytes < 0) {
+        return -1;
+    }
 
     int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
     PRINTF("  Sn_RX_RD=0x%x\n", ptr);
@@ -503,7 +400,6 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
     return packet_info.len;
 }
 
-
 ssize_t do_sendto(int sockfd, const void *buf, size_t len,
                   int flags, struct sockaddr *dest_addr, socklen_t addrlen)
 {
@@ -524,11 +420,16 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
 
     int blk_sreg = sno * 4 + 1;
     int blk_txbuf = sno * 4 + 2;
+    usock *u = &usock_array[sno];
 
-    size_t free;
+    int free;
     do {
-        free = w5500_read_w(W5500_Sn_TX_FSR, blk_sreg);
-        PRINTF("  Sn_TX_FSR=%lu\n", free);
+        PRINTF("  Sn_TX_FSR=");
+        free = wait_data(blk_sreg, W5500_Sn_TX_FSR,
+                         u->type == SOCK_DGRAM + 1 ? W5500_Sn_SR_UDP : W5500_Sn_SR_IPRAW);
+        if (free < 0) {
+            return -1;
+        }
     } while (free < len);
 
     struct sockaddr_in *sin = (struct sockaddr_in *)dest_addr;
@@ -544,7 +445,6 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_SEND);
     return len;
 }
-
 
 int do_close(int sockfd)
 {
@@ -563,7 +463,6 @@ int do_close(int sockfd)
 
     return 0;
 }
-
 
 int do_socklen(int sockfd, int mode)
 {
@@ -586,7 +485,6 @@ int do_socklen(int sockfd, int mode)
         return -1;
     }
 }
-
 
 // ---------------------------------------------------------------------------
 

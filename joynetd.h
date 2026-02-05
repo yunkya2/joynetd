@@ -25,11 +25,58 @@
 #ifndef _JOYNETD_H_
 #define _JOYNETD_H_
 
-//#define PRINTF(...)
-#define PRINTF(...) printf(__VA_ARGS__)
+//#define DEBUG
 
-#include "inetcmd.h"
-#include "inetdns.h"
-#include "inetetc.h"
+#ifdef DEBUG
+#define PRINTF(...) printf(__VA_ARGS__)
+#else
+#define PRINTF(...)
+#endif
+
+#include <sys/socket.h>
+#include <netdb.h>
+
+#include "w5500.h"
+
+// inetcmd.c
+int do_socket(int domain, int type, int protocol);
+int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+ssize_t do_read(int sockfd, void *buf, size_t count);
+ssize_t do_write(int sockfd, const void *buf, size_t count);
+ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
+                    int flags, struct sockaddr *src_addr, socklen_t *addrlen);
+ssize_t do_sendto(int sockfd, const void *buf, size_t len,
+                  int flags, struct sockaddr *dest_addr, socklen_t addrlen);
+int do_close(int sockfd);
+int do_socklen(int sockfd, int mode);
+
+int do_seteol(int sockfd, char *seq);
+int do_sockmode(int sockfd, int mode);
+int do_setflush(int sockfd, int chr);
+int do_psocket(long *arg);
+
+// inetdns.c
+struct rrec;
+int do_res_query(char *dname, int class, int type, unsigned char *answer, int anslen);
+int do_res_search(char *dname, int class, int type, unsigned char *answer, int anslen);
+int do_res_mkquery(int op, char *dname, int class, int type, char *data, int datalen,
+                   struct rrec *newrr, char *buf, int buflen);
+int do_res_send(char *msg, int msglen, char *answer, int anslen);
+
+// inetetc.c
+struct hostent *do_gethostbyname(const char *name);
+struct hostent *do_gethostbyaddr(const void *addr, socklen_t len, int type);
+struct netent *do_getnetbyname(const char *name);
+struct netent *do_getnetbyaddr(uint32_t net, int type);
+struct servent *do_getservbyname(const char *name, const char *proto);
+struct servent *do_getservbyport(int port, const char *proto);
+struct protoent *do_getprotobynumber(int proto);
+struct protoent *do_getprotobyname(const char *name);
+
+int init_etc_files(void);
+void fini_etc_files(void);
+
+// inetconfig.c
+void read_config(void);
 
 #endif /* _JOYNETD_H_ */
