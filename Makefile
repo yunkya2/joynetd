@@ -39,8 +39,9 @@ LDFLAGS += -Wl,-Map,$(@:.x=.map) -specs=nano.specs
 INC +=
 DEFS +=
 
-OBJS += head.o joynetd.o inetcmd.o w5500.o
 TARGET = joynetd.x
+OBJS += head.o joynetd.o inetcmd.o inetdns.o inetetc.o w5500.o
+LIBS += -lsocket
 
 all: $(TARGET)
 

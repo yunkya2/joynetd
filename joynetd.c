@@ -35,6 +35,8 @@
 #include "tcpipdrv.h"
 #include "w5500.h"
 
+#include "inetetc.h"
+
 //****************************************************************************
 // Macros and definitions
 //****************************************************************************
@@ -185,6 +187,8 @@ int main(int argc, char **argv)
     printf("\n");
 #endif
     w5500_fin();
+
+    init_etc_files();
 
     void configure(void);
     configure();

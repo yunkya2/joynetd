@@ -31,6 +31,7 @@
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
@@ -38,14 +39,11 @@
 #include "tcpipdrv.h"
 #include "w5500.h"
 
+#include "joynetd.h"
+
 //****************************************************************************
 // Macros and definitions
 //****************************************************************************
-
-//#define PRINTF(...)
-#define PRINTF(...) printf(__VA_ARGS__)
-
-//----------------------------------------------------------------------------
 
 #define ARPSIZE 17
 
@@ -303,24 +301,31 @@ int do_socket(int domain, int type, int protocol)
             u->p = (void *)port;    // TBD
 
             int blk_sreg = i * 4 + 1;
+            int socket_mode;
+            int socket_stat;
+
             switch (type) {
             case SOCK_STREAM:
-                w5500_write_b(W5500_Sn_MR, blk_sreg, 0x01);  // TCP mode
+                socket_mode = 0x01;
+                socket_stat = W5500_Sn_SR_INIT;
                 break;
             case SOCK_DGRAM:
-                w5500_write_b(W5500_Sn_MR, blk_sreg, 0x02);  // UDP mode
+                socket_mode = 0x02;
+                socket_stat = W5500_Sn_SR_UDP;
                 break;
             case SOCK_RAW:
-                w5500_write_b(W5500_Sn_MR, blk_sreg, 0x03);  // MACRAW mode
+                socket_mode = 0x03;
+                socket_stat = W5500_Sn_SR_MACRAW;
                 break;
             default:
                 PRINTF("joynetd: unsupported socket type %d\n", type);
                 u->type = NOTUSED;
                 return -1;  // EPROTOTYPE
             }
+            w5500_write_b(W5500_Sn_MR, blk_sreg, socket_mode);
             w5500_write_w(W5500_Sn_PORT, blk_sreg, port);
             w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_OPEN);
-            if (wait_status(blk_sreg, W5500_Sn_SR_INIT) < 0) {
+            if (wait_status(blk_sreg, socket_stat) < 0) {
                 PRINTF("socket open timeout\n");
                 w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
                 u->type = NOTUSED;
@@ -579,16 +584,6 @@ int do_psocket(long *arg)
 
 // ---------------------------------------------------------------------------
 
-int do_gethostbyname(long *arg)
-{
-    const char *name = (const char *)arg;
-
-    PRINTF("joynetd: gethostbyname(%s)\n", name);
-    return 0;
-}
-
-// ---------------------------------------------------------------------------
-
 int do_command(int cmd, long *arg)
 {
     PRINTF("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
@@ -628,11 +623,18 @@ int do_command(int cmd, long *arg)
     case _TI_dns_get:
     case _TI_set_domain_name:
     case _TI_get_domain_name:
+        return 0;
     case _TI_res_query:
+        return do_res_query((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
     case _TI_res_search:
+        return do_res_search((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
     case _TI_res_mkquery:
+        return do_res_mkquery(arg[0], (char *)arg[1], arg[2], arg[3],
+                              (char *)arg[4], arg[5],
+                              (struct rrec *)arg[6],
+                              (char *)arg[7], arg[8]);
     case _TI_res_sendquery:
-        return -1;
+        return do_res_send((char *)arg[0], arg[1], (char *)arg[2], arg[3]);
 
     case _TI_get_MIB:
         return (int)&mib_array;
@@ -689,15 +691,21 @@ int do_command(int cmd, long *arg)
         return 0;
 
     case _TI_gethostbyname:
-        return do_gethostbyname(arg);
+        return (int)do_gethostbyname((const char *)arg);
     case _TI_gethostbyaddr:
+        return (int)do_gethostbyaddr((const char *)arg[0], arg[1], arg[2]);
     case _TI_getnetbyname:
+        return (int)do_getnetbyname((const char *)arg);
     case _TI_getnetbyaddr:
+        return (int)do_getnetbyaddr(arg[0], arg[1]);
     case _TI_getservbyname:
+        return (int)do_getservbyname((const char *)arg[0], (const char *)arg[1]);
     case _TI_getservbyport:
+        return (int)do_getservbyport(arg[0], (const char *)arg[1]);
     case _TI_getprotobyname:
+        return (int)do_getprotobyname((const char *)arg);
     case _TI_getprotobynumber:
-        return -1;
+        return (int)do_getprotobynumber((int)arg);
 
     case _TI_rip:
         return -1;
