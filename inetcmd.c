@@ -277,12 +277,48 @@ int do_socket(int domain, int type, int protocol)
     for (int i = 0; i < W5500_N_SOCKETS; i++) {
         usock *u = &usock_array[i];
         if (u->type == NOTUSED) {
+
+            // ポート番号を適当に決める
+            int port;
+            while (1) {
+                port = current_eph_port++;
+                if (current_eph_port >= EPH_PORT_END) {
+                    current_eph_port = EPH_PORT_BEGIN;
+                }
+                int i;
+                for (i = 0; i < W5500_N_SOCKETS; i++) {
+                    usock *ua = &usock_array[i];
+                    if (ua->type ==type && (int)ua->p == port) {
+                        break;
+                    }
+                }
+                if (i == W5500_N_SOCKETS) {
+                    break;
+                }
+            }
+
             memset(u, 0, sizeof(usock));
             u->type = type + 1;
             u->refcnt = 1;
+            u->p = (void *)port;    // TBD
 
             int blk_sreg = i * 4 + 1;
-            w5500_write_b(W5500_Sn_MR, blk_sreg, 0x01);  // TCP mode
+            switch (type) {
+            case SOCK_STREAM:
+                w5500_write_b(W5500_Sn_MR, blk_sreg, 0x01);  // TCP mode
+                break;
+            case SOCK_DGRAM:
+                w5500_write_b(W5500_Sn_MR, blk_sreg, 0x02);  // UDP mode
+                break;
+            case SOCK_RAW:
+                w5500_write_b(W5500_Sn_MR, blk_sreg, 0x03);  // MACRAW mode
+                break;
+            default:
+                PRINTF("joynetd: unsupported socket type %d\n", type);
+                u->type = NOTUSED;
+                return -1;  // EPROTOTYPE
+            }
+            w5500_write_w(W5500_Sn_PORT, blk_sreg, port);
             w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_OPEN);
             if (wait_status(blk_sreg, W5500_Sn_SR_INIT) < 0) {
                 PRINTF("socket open timeout\n");
@@ -307,30 +343,6 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     }
 
     int blk_sreg = sno * 4 + 1;
-    usock *mysock = &usock_array[sno];
-    int port;
-    while (1) {
-        port = current_eph_port++;
-        if (current_eph_port >= EPH_PORT_END) {
-            current_eph_port = EPH_PORT_BEGIN;
-        }
-        int i;
-        for (i = 0; i < W5500_N_SOCKETS; i++) {
-            usock *u = &usock_array[i];
-            if (u == mysock) {
-                continue;
-            }
-            if (u->type == mysock->type && (int)u->p == port) {
-                break;
-            }
-        }
-        if (i == W5500_N_SOCKETS) {
-            break;
-        }
-    }
-    mysock->p = (void *)port;    // TBD
-
-    w5500_write_w(W5500_Sn_PORT, blk_sreg, port);
 
     struct sockaddr_in *sin = (struct sockaddr_in *)addr;
     w5500_write_l(W5500_Sn_DIPR, blk_sreg, ntohl(sin->sin_addr.s_addr));
@@ -410,6 +422,90 @@ ssize_t do_write(int sockfd, const void *buf, size_t count)
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_SEND);
     }
     return written;
+}
+
+ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
+                    int flags, struct sockaddr *src_addr, socklen_t *addrlen)
+{
+    PRINTF("joynetd: recvfrom(%d, %p, %lu, %d, %p, %p)\n", sockfd, buf, len, flags, src_addr, addrlen);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
+    int blk_sreg = sno * 4 + 1;
+    int blk_rxbuf = sno * 4 + 3;
+
+    PRINTF("  S0_RX_RSR=");
+    int bytes;
+    do {
+        bytes = w5500_read_w(W5500_Sn_RX_RSR, blk_sreg);
+        PRINTF("%d ", bytes);fflush(stdout);
+    } while (bytes == 0);
+    PRINTF("\n");
+
+    int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
+    PRINTF("  S0_RX_RD=0x%x\n", ptr);
+
+    struct {
+        in_addr_t sin_addr;
+        in_port_t sin_port;
+        uint16_t len;
+    } packet_info;
+
+    w5500_read(ptr, blk_rxbuf, (uint8_t *)&packet_info, sizeof(packet_info));
+    ptr += sizeof(packet_info);
+
+    w5500_read(ptr, blk_rxbuf, (uint8_t *)buf, packet_info.len);
+    ptr += packet_info.len;
+    w5500_write_w(W5500_Sn_RX_RD, blk_sreg, ptr);
+    PRINTF("  S0_RX_RD=0x%x\n", ptr);
+    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_RECV);
+
+    if (src_addr != NULL && addrlen != NULL && *addrlen >= sizeof(struct sockaddr_in)) {
+        struct sockaddr_in *sin = (struct sockaddr_in *)src_addr;
+        sin->sin_family = AF_INET;
+        sin->sin_addr.s_addr = htonl(packet_info.sin_addr);
+        sin->sin_port = htons(packet_info.sin_port);
+        *addrlen = sizeof(struct sockaddr_in);
+    }
+
+    return packet_info.len;
+}
+
+
+ssize_t do_sendto(int sockfd, const void *buf, size_t len,
+                  int flags, struct sockaddr *dest_addr, socklen_t addrlen)
+{
+    PRINTF("joynetd: sendto(%d, %p, %lu, %d, %p, %lu)\n", sockfd, buf, len, flags, dest_addr, addrlen);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
+    int blk_sreg = sno * 4 + 1;
+    int blk_txbuf = sno * 4 + 2;
+
+    size_t free;
+    do {
+        free = w5500_read_w(W5500_Sn_TX_FSR, blk_sreg);
+        PRINTF("  S0_TX_FSR=%lu\n", free);
+    } while (free < len);
+
+    struct sockaddr_in *sin = (struct sockaddr_in *)dest_addr;
+    w5500_write_l(W5500_Sn_DIPR, blk_sreg, ntohl(sin->sin_addr.s_addr));
+    w5500_write_w(W5500_Sn_DPORT, blk_sreg, ntohs(sin->sin_port));
+
+    int ptr = w5500_read_w(W5500_Sn_TX_WR, blk_sreg);
+    PRINTF("  S0_TX_WR=0x%x\n", ptr);
+    w5500_write(ptr, blk_txbuf, (uint8_t *)buf, len);
+    ptr += len;
+    w5500_write_w(W5500_Sn_TX_WR, blk_sreg, ptr);
+    PRINTF("  S0_TX_WR=0x%x\n", ptr);
+    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_SEND);
+    return len;
 }
 
 
@@ -554,10 +650,11 @@ int do_command(int cmd, long *arg)
     case _TI_write_s:
         return do_write(arg[0], (const void *)arg[1], arg[2]);
     case _TI_recvfrom:
-
-
+        return do_recvfrom(arg[0], (void *)arg[1], arg[2],
+                           arg[3], (struct sockaddr *)arg[4], (socklen_t *)arg[5]);
     case _TI_sendto:
-        return -1;
+        return do_sendto(arg[0], (const void *)arg[1], arg[2],
+                         arg[3], (struct sockaddr *)arg[4], arg[5]);
     case _TI_close_s:
         return do_close((int)arg);
     case _TI_socklen:
