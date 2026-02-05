@@ -75,6 +75,7 @@ void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len);
 #define W5500_Sn_DIPR       0x000c  // Socket n Destination IP Address
 #define W5500_Sn_DPORT      0x0010  // Socket n Destination Port
 #define W5500_Sn_MSSR       0x0012  // Socket n Maximum Segment Size
+#define W5500_Sn_PROTO      0x0014  // Socket n IPRAW Protocol
 #define W5500_Sn_TOS        0x0015  // Socket n IP TOS
 #define W5500_Sn_TTL        0x0016  // Socket n IP TTL
 #define W5500_Sn_RXBUF_SIZE 0x001e  // Socket n Receive Buffer Size
@@ -115,6 +116,7 @@ void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len);
 #define W5500_Sn_SR_CLOSE_WAIT  0x1c
 #define W5500_Sn_SR_LAST_ACK    0x1d
 #define W5500_Sn_SR_UDP         0x22
+#define W5500_Sn_SR_IPRAW       0x32
 #define W5500_Sn_SR_MACRAW      0x42
 
 #endif /* _W5500_H_ */
