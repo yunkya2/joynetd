@@ -28,7 +28,7 @@
 #include <sys/socket.h>
 
 struct hostent *do_gethostbyname(const char *name);
-//struct hostent *do_gethostbyaddr(const char *addr, socklen_t len, int type);
+struct hostent *do_gethostbyaddr(const void *addr, socklen_t len, int type);
 struct netent *do_getnetbyname(const char *name);
 struct netent *do_getnetbyaddr(uint32_t net, int type);
 struct servent *do_getservbyname(const char *name, const char *proto);

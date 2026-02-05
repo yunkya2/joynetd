@@ -73,13 +73,6 @@ typedef struct {
     unsigned short class;
 } DNSQuestion;
 
-// DNS Resource Record
-typedef struct {
-    unsigned short type;
-    unsigned short class;
-    unsigned int ttl;
-    unsigned short rdlen;
-} DNSResourceRecord;
 
 int do_res_query(char *dname, int class, int type, unsigned char *answer, int anslen)
 {

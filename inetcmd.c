@@ -385,6 +385,8 @@ ssize_t do_read(int sockfd, void *buf, size_t count)
     } while (len == 0);
     PRINTF("\n");
 
+    len = (count < len) ? count : len;
+
     int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
     PRINTF("  Sn_RX_RD=0x%x\n", ptr);
     w5500_read(ptr, blk_rxbuf, (uint8_t *)buf, len);
@@ -472,7 +474,7 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
         } packet_info_ipraw;
 
         w5500_read(ptr, blk_rxbuf, (uint8_t *)&packet_info_ipraw, sizeof(packet_info_ipraw));
-        PRINTF("addr=%08x len=%d\n", packet_info_ipraw.sin_addr, packet_info_ipraw.len);
+        PRINTF("addr=%08lx len=%u\n", packet_info_ipraw.sin_addr, packet_info_ipraw.len);
         ptr += sizeof(packet_info_ipraw);
         packet_info.sin_addr = packet_info_ipraw.sin_addr;
         packet_info.sin_port = 0;
