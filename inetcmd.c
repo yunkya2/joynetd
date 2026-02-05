@@ -45,41 +45,6 @@
 // Macros and definitions
 //****************************************************************************
 
-#define ARPSIZE 17
-
-typedef struct _arp_table
-{
-  struct _arp_table *prev;
-  struct _arp_table *next;
-
-  long tmp1;
-  long tmp2;
-  int state;
-  long tmp3;
-  long tmp4;
-  long ip_addr;
-  int hw_addr_len;
-  char hw_addr[16];
-} _arp_table;
-
-//----------------------------------------------------------------------------
-
-struct mib_entry
-{
-    char *name;
-    union {
-        long integer;
-    } value;
-};
-
-struct mib_array {
-    struct mib_entry* mib;
-    int mib_size;
-    char *name;
-};
-
-//----------------------------------------------------------------------------
-
 #define NOTUSED (0)
 #define SOCKBASE 128
 #define DEFNSOCK 32
@@ -112,9 +77,14 @@ typedef struct usock
 // Global variables
 //****************************************************************************
 
-_arp_table *arp_table[ARPSIZE];
+#define ARPSIZE 17
+void *dummy_arp_table[ARPSIZE];
 
-struct mib_array mib_array[4] = {
+struct {
+    void *entry;
+    int size;
+    const char *name;
+} dummy_mib_array[4] = {
     { NULL, 0, "IP" },
     { NULL, 0, "ICMP" },
     { NULL, 0, "UDP" },
@@ -138,6 +108,8 @@ static uint8_t w5500_gw[4];
 static uint8_t w5500_sm[4];
 static uint8_t w5500_sip[4];
 
+uint8_t w5500_dns[4];
+
 //////////////////////////////////////////////////////////////////////////////
 
 void configure(void)
@@ -152,7 +124,7 @@ void configure(void)
         struct dos_psp *psp = _dos_getpdb ();
 
         strcpy(cfgname, psp->exe_path);
-        strcat(cfgname, "w5500.cfg");
+        strcat(cfgname, "joynetd.cfg");
         if ((fp = fopen(cfgname, "r")) != NULL) {
             char line[256];
             char *p;
@@ -182,31 +154,43 @@ void configure(void)
                         w5500_gw[i] = strtoul(p, &q, 0);
                         p = q + 1;
                     }
+                } else if (strncmp(line, "dns=", 4) == 0) {
+                    p = &line[4];
+                    for (int i = 0; i < 4; i++) {
+                        w5500_dns[i] = strtoul(p, &q, 0);
+                        p = q + 1;
+                    }
                 }
             }
             fclose(fp);
         }
         printf("MAC: ");
         for (int i = 0; i < 6; i++) {
-            printf("%02x:", w5500_mac[i]);
+            printf("%02x%s", w5500_mac[i], i < 5 ? ":" : "");
         }
         printf("\n");
 
         printf("IP: ");
         for (int i = 0; i < 4; i++) {
-            printf("%d.", w5500_sip[i]);
+            printf("%d%s", w5500_sip[i], i < 3 ? "." : "");
         }
         printf("\n");
 
         printf("netmask: ");
         for (int i = 0; i < 4; i++) {
-            printf("%d.", w5500_sm[i]);
+            printf("%d%s", w5500_sm[i], i < 3 ? "." : "");
         }
         printf("\n");
 
         printf("gateway: ");
         for (int i = 0; i < 4; i++) {
-            printf("%d.", w5500_gw[i]);
+            printf("%d%s", w5500_gw[i], i < 3 ? "." : "");
+        }
+        printf("\n");
+
+        printf("DNS: ");
+        for (int i = 0; i < 4; i++) {
+            printf("%d%s", w5500_dns[i], i < 3 ? "." : "");
         }
         printf("\n");
 
@@ -337,6 +321,24 @@ int do_socket(int domain, int type, int protocol)
         }
     }
     return -1;  // ENOMEM
+}
+
+int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    PRINTF("joynetd: bind(%d, %p, %lu)\n", sockfd, addr, addrlen);
+    return 0;
+}
+
+int do_listen(int sockfd, int backlog)
+{
+    PRINTF("joynetd: listen(%d, %d)\n", sockfd, backlog);
+    return 0;
+}
+
+int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    PRINTF("joynetd: accept(%d, %p, %p)\n", sockfd, addr, addrlen);
+    return 0;
 }
 
 int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
@@ -588,6 +590,66 @@ int do_socklen(int sockfd, int mode)
 
 // ---------------------------------------------------------------------------
 
+int do_getsockname(int sockfd, char *name, int *namelen)
+{
+    PRINTF("joynetd: getsockname(%d, %p, %p)\n", sockfd, name, namelen);
+    return 0;
+}
+
+int do_getpeername(int sockfd, char *peer, int peerlen)
+{
+    PRINTF("joynetd: getpeername(%d, %p, %d)\n", sockfd, peer, peerlen);
+    return 0;
+}
+
+int do_sockkick(int sockfd)
+{
+    PRINTF("joynetd: sockkick(%d)\n", sockfd);
+    return 0;
+}
+
+int do_shutdown(int sockfd, int how)
+{
+    PRINTF("joynetd: shutdown(%d, %d)\n", sockfd, how);
+    return 0;
+}
+
+int do_usesock(int sockfd)
+{
+    PRINTF("joynetd: usesock(%d)\n", sockfd);
+    return 0;
+}
+
+int do_recvline(int sockfd, char *buf, size_t len)
+{
+    PRINTF("joynetd: recvline(%d, %p, %lu)\n", sockfd, buf, len);
+    return 0;
+}
+
+int do_sendline(int sockfd, const char *buf, size_t len)
+{
+    PRINTF("joynetd: sendline(%d, %p, %lu)\n", sockfd, buf, len);
+    return 0;
+}
+
+int do_rrecvchar(int sockfd)
+{
+    PRINTF("joynetd: rrecvchar(%d)\n", sockfd);
+    return 0;
+}
+
+int do_recvchar(int sockfd)
+{
+    PRINTF("joynetd: recvchar(%d)\n", sockfd);
+    return 0;
+}
+
+int do_usflush(int sockfd)
+{
+    PRINTF("joynetd: usflush(%d)\n", sockfd);
+    return 0;
+}
+
 int do_seteol(int sockfd, char *seq)
 {
     PRINTF("joynetd: seteol(%d, %02x:%02x)\n", sockfd, seq[0], seq[1]);
@@ -610,6 +672,18 @@ int do_psocket(long *arg)
 {
     PRINTF("joynetd: psocket(%p)\n", arg);
     return (int)arg;
+}
+
+char *do_sockerr(int sockfd)
+{
+    PRINTF("joynetd: sockerr(%d)\n", sockfd);
+    return "";
+}
+
+char *do_sockstate(int sockfd)
+{
+    PRINTF("joynetd: sockstate(%d)\n", sockfd);
+    return "";
 }
 
 // ---------------------------------------------------------------------------
@@ -639,7 +713,7 @@ int do_command(void)
     case _TI_search_arp_table:
         return 0;
     case _TI_get_arp_table_top:
-        return (int)&arp_table;
+        return (int)&dummy_arp_table;
     case _TI_arp_request:
         return 0;
 
@@ -653,7 +727,7 @@ int do_command(void)
     case _TI_rt_lookupb:
     case _TI_rt_drop:
     case _TI_rt_add:
-        return -1;
+        return 0;
 
     case _TI_dns_add:
     case _TI_dns_drop:
@@ -675,14 +749,16 @@ int do_command(void)
         return do_res_send((char *)arg[0], arg[1], (char *)arg[2], arg[3]);
 
     case _TI_get_MIB:
-        return (int)&mib_array;
+        return (int)&dummy_mib_array;
 
     case _TI_socket:
         return do_socket(arg[0], arg[1], arg[2]);
     case _TI_bind:
+        return do_bind(arg[0], (const struct sockaddr *)arg[1], arg[2]);
     case _TI_listen:
+        return do_listen(arg[0], arg[1]);
     case _TI_accept:
-        return -1;
+        return do_accept(arg[0], (struct sockaddr *)arg[1], (socklen_t *)arg[2]);
     case _TI_connect:
         return do_connect(arg[0], (const struct sockaddr *)arg[1], arg[2]);
     case _TI_read_s:
@@ -700,16 +776,25 @@ int do_command(void)
     case _TI_socklen:
         return do_socklen(arg[0], arg[1]);
     case _TI_getsockname:
+        return do_getsockname(arg[0], (char *)arg[1], (int *)arg[2]);
     case _TI_getpeername:
+        return do_getpeername(arg[0], (char *)arg[1], arg[2]);
     case _TI_sockkick:
+        return do_sockkick(arg[0]);
     case _TI_shutdown:
+        return do_shutdown(arg[0], arg[1]);
     case _TI_usesock:
+        return do_usesock(arg[0]);
     case _TI_recvline:
+        return do_recvline(arg[0], (char *)arg[1], arg[2]);
     case _TI_sendline:
+        return do_sendline(arg[0], (const char *)arg[1], arg[2]);
     case _TI_rrecvchar:
+        return do_rrecvchar(arg[0]);
     case _TI_recvchar:
+        return do_recvchar(arg[0]);
     case _TI_usflush:
-        return -1;
+        return do_usflush(arg[0]);
     case _TI_seteol:
         return do_seteol(arg[0], (char *)arg[1]);
     case _TI_sockmode:
@@ -719,9 +804,9 @@ int do_command(void)
     case _TI_psocket:
         return do_psocket(arg);
     case _TI_sockerr:
-        return -1;
+        return (int)do_sockerr((int)arg);
     case _TI_sockstate:
-        return -1;
+        return (int)do_sockstate((int)arg);
 
     case _TI_sock_top:
         return (int)&usock_array;

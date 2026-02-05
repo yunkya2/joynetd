@@ -49,11 +49,12 @@
 // Global variables
 //****************************************************************************
 
+extern uint8_t w5500_dns[4];
+
 //****************************************************************************
 // Private functions
 //****************************************************************************
 
-#define DNS_SERVER "8.8.8.8"  // Google DNS
 #define DNS_PORT 53
 #define MAX_RESPONSE_SIZE 512
 
@@ -183,7 +184,7 @@ int do_res_send(char *msg, int msglen, char *answer, int anslen)
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(DNS_PORT);
-    inet_pton(AF_INET, DNS_SERVER, &server_addr.sin_addr);
+    memcpy(&server_addr.sin_addr, w5500_dns, 4);
     
     ssize_t n = do_sendto(sock, msg, msglen, 0,
                           (struct sockaddr *)&server_addr, sizeof(server_addr));
