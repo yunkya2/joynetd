@@ -89,7 +89,9 @@ void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len);
 #define W5500_Sn_FRAG       0x002d  // Socket n Fragment Offset in IP
 #define W5500_Sn_KPALVTR    0x002f  // Socket n Keep Alive Timer
 
-// Socket n Commands
+#define W5500_N_SOCKETS     8
+
+// Socket n Command code (W5500_Sn_CR)
 #define W5500_Sn_CR_OPEN        0x01
 #define W5500_Sn_CR_LISTEN      0x02
 #define W5500_Sn_CR_CONNECT     0x04
@@ -100,8 +102,19 @@ void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len);
 #define W5500_Sn_CR_SEND_KEEP   0x22
 #define W5500_Sn_CR_RECV        0x40
 
-
-
-
+// Socket n Status code (W5500_Sn_SR)
+#define W5500_Sn_SR_CLOSED      0x00
+#define W5500_Sn_SR_INIT        0x13
+#define W5500_Sn_SR_LISTEN      0x14
+#define W5500_Sn_SR_SYNSENT     0x15
+#define W5500_Sn_SR_SYNRECV     0x16
+#define W5500_Sn_SR_ESTABLISHED 0x17
+#define W5500_Sn_SR_FIN_WAIT    0x18
+#define W5500_Sn_SR_CLOSING     0x1a
+#define W5500_Sn_SR_TIME_WAIT   0x1b
+#define W5500_Sn_SR_CLOSE_WAIT  0x1c
+#define W5500_Sn_SR_LAST_ACK    0x1d
+#define W5500_Sn_SR_UDP         0x22
+#define W5500_Sn_SR_MACRAW      0x42
 
 #endif /* _W5500_H_ */

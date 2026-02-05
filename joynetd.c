@@ -175,6 +175,7 @@ int main(int argc, char **argv)
     }
 #endif
 
+#if 0
     for (int i = 0; i < 0x40; i++) {
         if (i % 16 == 0) {
             printf("\n%02x:", i);
@@ -182,7 +183,7 @@ int main(int argc, char **argv)
         printf(" %02x", w5500_read_b(i, 0));
     }
     printf("\n");
-
+#endif
     w5500_fin();
 
     void configure(void);
