@@ -659,8 +659,9 @@ int do_command(void)
     case _TI_dns_drop:
     case _TI_dns_get:
     case _TI_set_domain_name:
-    case _TI_get_domain_name:
         return 0;
+    case _TI_get_domain_name:
+        return (int)"";
     case _TI_res_query:
         return do_res_query((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
     case _TI_res_search:

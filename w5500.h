@@ -29,6 +29,8 @@
 
 // w5500 APIs
 
+int w5500_select(int port);
+
 void w5500_ini(void);
 void w5500_fin(void);
 

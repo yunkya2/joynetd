@@ -114,8 +114,9 @@ static void *find_tcpip(void)
 
 void help(void)
 {
-    printf("Usage: joynetd [-r]\n");
+    printf("Usage: joynetd [-r] [-p<port number>]\n");
     printf("  -r    Remove resident joynetd from memory\n");
+    printf("  -p    Specify port number (1 or 2) (default: 1)\n");
     exit(1);
 }
 
@@ -123,11 +124,19 @@ int main(int argc, char **argv)
 {
     _dos_print("X680x0 Ethernet Joy-kun Network driver (version " GIT_REPO_VERSION ")\r\n");
 
+    int port = 1;
+
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-' || argv[i][0] == '/') {
             switch (argv[i][1]) {
             case 'r':
                 opt_r = true;
+                break;
+            case 'p':
+                port = atoi(&argv[i][2]);
+                if (port < 1 || port > 2) {
+                    help();
+                }
                 break;
             default:
                 help();
@@ -135,6 +144,8 @@ int main(int argc, char **argv)
             }
         }
     }
+
+    w5500_select(port);
 
     _dos_super(0);
 
