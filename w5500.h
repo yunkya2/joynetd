@@ -40,7 +40,7 @@ void w5500_read(uint16_t addr, uint8_t block, uint8_t *data, size_t len);
 void w5500_write_b(uint16_t addr, uint8_t block, uint8_t data);
 void w5500_write_w(uint16_t addr, uint8_t block, uint16_t data);
 void w5500_write_l(uint16_t addr, uint8_t block, uint32_t data);
-void w5500_write(uint16_t addr, uint8_t block, uint8_t *data, size_t len);
+void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len);
 
 // w5500 register definitions
 
@@ -88,5 +88,20 @@ void w5500_write(uint16_t addr, uint8_t block, uint8_t *data, size_t len);
 #define W5500_Sn_IMR        0x002c  // Socket n Interrupt Mask
 #define W5500_Sn_FRAG       0x002d  // Socket n Fragment Offset in IP
 #define W5500_Sn_KPALVTR    0x002f  // Socket n Keep Alive Timer
+
+// Socket n Commands
+#define W5500_Sn_CR_OPEN        0x01
+#define W5500_Sn_CR_LISTEN      0x02
+#define W5500_Sn_CR_CONNECT     0x04
+#define W5500_Sn_CR_DISCON      0x08
+#define W5500_Sn_CR_CLOSE       0x10
+#define W5500_Sn_CR_SEND        0x20
+#define W5500_Sn_CR_SEND_MAC    0x21
+#define W5500_Sn_CR_SEND_KEEP   0x22
+#define W5500_Sn_CR_RECV        0x40
+
+
+
+
 
 #endif /* _W5500_H_ */

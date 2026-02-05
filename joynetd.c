@@ -52,67 +52,6 @@ struct joynetd_data {
     void *memblock;
 };
 
-//----------------------------------------------------------------------------
-
-#define ARPSIZE 17
-
-typedef struct _arp_table
-{
-  struct _arp_table *prev;
-  struct _arp_table *next;
-
-  long tmp1;
-  long tmp2;
-  int state;
-  long tmp3;
-  long tmp4;
-  long ip_addr;
-  int hw_addr_len;
-  char hw_addr[16];
-} _arp_table;
-
-//----------------------------------------------------------------------------
-
-struct mib_entry
-{
-    char *name;
-    union {
-        long integer;
-    } value;
-};
-
-struct mib_array {
-    struct mib_entry* mib;
-    int mib_size;
-    char *name;
-};
-
-//----------------------------------------------------------------------------
-
-#define NOTUSED (0)
-#define SOCKBASE 128
-#define DEFNSOCK 32
-typedef struct usock
-{
-    int     refcnt;
-    char    noblock;
-    char    type;
-    int     rdysock;
-    void    *p;
-    char    *name;
-    int     namelen;
-    char    *peername;
-    int     peernamelen;
-    char    errcodes[4];    /* Protocol-specific error codes */
-    void    *obuf;          /* Output buffer */
-    void    *ibuf;          /* Input buffer */
-    char    eol[3];         /* Text mode end-of-line sequence, if any */
-    int     flag;           /* Mode flags, defined in socket.h */
-    int     flush;          /* Character to trigger flush, if any */
-    int     event;
-} usock;
-
-
 //****************************************************************************
 // Global variables
 //****************************************************************************
@@ -120,18 +59,6 @@ typedef struct usock
 extern struct dos_devheader devheader;  // Human68kのデバイスヘッダ
 
 struct joynetd_data joynetd_data;
-
-_arp_table *arp_table[ARPSIZE];
-
-struct mib_array mib_array[4] = {
-    { NULL, 0, "IP" },
-    { NULL, 0, "ICMP" },
-    { NULL, 0, "UDP" },
-    { NULL, 0, "TCP" }
-};
-
-usock usock_array[DEFNSOCK];
-
 
 bool opt_r = false;  // -r option
 
@@ -179,107 +106,6 @@ static void *find_tcpip(void)
     return NULL;
 }
 
-//----------------------------------------------------------------------------
-
-int do_command(int cmd, void *arg)
-{
-    printf("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
-
-    switch (cmd) {
-    case -1:        // trap番号の取得
-        return -1;  // trap未対応
-
-    case _TI_get_version:
-        return 0x00010000;  // (TBD) version
-
-    case _TI_add_arp_table:
-    case _TI_del_arp_table:
-    case _TI_search_arp_table:
-        return 0;
-    case _TI_get_arp_table_top:
-        return (int)&arp_table;
-    case _TI_arp_request:
-        return 0;
-
-    case _TI_get_iface_list:
-    case _TI_get_new_iface:
-    case _TI_link_new_iface:
-        return 0;
-
-    case _TI_rt_top:
-    case _TI_rt_lookup:
-    case _TI_rt_lookupb:
-    case _TI_rt_drop:
-    case _TI_rt_add:
-        return -1;
-
-    case _TI_dns_add:
-    case _TI_dns_drop:
-    case _TI_dns_get:
-    case _TI_set_domain_name:
-    case _TI_get_domain_name:
-    case _TI_res_query:
-    case _TI_res_search:
-    case _TI_res_mkquery:
-    case _TI_res_sendquery:
-        return -1;
-
-    case _TI_get_MIB:
-        return (int)&mib_array;
-
-    case _TI_socket:
-    case _TI_bind:
-    case _TI_listen:
-    case _TI_accept:
-    case _TI_connect:
-    case _TI_read_s:
-    case _TI_write_s:
-    case _TI_recvfrom:
-    case _TI_sendto:
-    case _TI_close_s:
-    case _TI_socklen:
-    case _TI_getsockname:
-    case _TI_getpeername:
-    case _TI_sockkick:
-    case _TI_shutdown:
-    case _TI_usesock:
-    case _TI_recvline:
-    case _TI_sendline:
-    case _TI_rrecvchar:
-    case _TI_recvchar:
-    case _TI_usflush:
-    case _TI_seteol:
-    case _TI_sockmode:
-    case _TI_setflush:
-    case _TI_psocket:
-    case _TI_sockerr:
-    case _TI_sockstate:
-        return -1;
-
-    case _TI_sock_top:
-        return (int)&usock_array;
-    case _TI_ntoa_sock:
-        return -1;
-
-    case _TI_gethostbyname:
-    case _TI_gethostbyaddr:
-    case _TI_getnetbyname:
-    case _TI_getnetbyaddr:
-    case _TI_getservbyname:
-    case _TI_getservbyport:
-    case _TI_getprotobyname:
-    case _TI_getprotobynumber:
-        return -1;
-
-    case _TI_rip:
-        return -1;
-    default:
-        break;
-    }
-
-    return -1;
-}
-
 //****************************************************************************
 // Program entry
 //****************************************************************************
@@ -313,6 +139,8 @@ int main(int argc, char **argv)
     if (opt_r) {
         struct dos_devheader *prev = find_devheader("/joynet/");
         if (prev != NULL) {
+            w5500_fin();
+
             struct joynetd_data *data = prev->next->data;
             prev->next = prev->next->next;
             _dos_print("joynetd を常駐解除しました\r\n");
@@ -339,11 +167,13 @@ int main(int argc, char **argv)
 
     w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
 
+#if 1
     if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
         _dos_print("イーサネットじょい君が接続されていません\r\n");
         w5500_fin();
         return 1;
     }
+#endif
 
     for (int i = 0; i < 0x40; i++) {
         if (i % 16 == 0) {
@@ -354,6 +184,9 @@ int main(int argc, char **argv)
     printf("\n");
 
     w5500_fin();
+
+    void configure(void);
+    configure();
 
     joynetd_data.memblock = _dos_getpdb();
 

@@ -328,7 +328,7 @@ void w5500_write_l(uint16_t addr, uint8_t block, uint32_t data)
     FIN_W5500_CS();
 }
 
-void w5500_write(uint16_t addr, uint8_t block, uint8_t *data, size_t len)
+void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len)
 {
     INI_W5500_CS();
     spi_sendbyte((addr >> 8) & 0xff);
