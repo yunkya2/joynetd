@@ -159,6 +159,14 @@ int do_res_mkquery(int op, char *dname, int class, int type, char *data, int dat
     return (char *)q - (char *)buf;
 }
 
+static inline unsigned int duration(struct iocs_time *t0)
+{
+    struct iocs_time now = _iocs_ontime();
+
+    return (now.sec - t0->sec) +
+           (now.day - t0->day) * 24 * 60 * 60 * 100;
+}
+
 int do_res_send(char *msg, int msglen, char *answer, int anslen)
 {
     PRINTF("joynetd: res_send(%p, %d, %p, %d)\n", msg, msglen, answer, anslen);
@@ -186,6 +194,26 @@ int do_res_send(char *msg, int msglen, char *answer, int anslen)
     }
     
     // Receive response
+
+    struct iocs_time t0 = _iocs_ontime();
+    int timeout = 100 * 1;
+    int counter = 0;
+
+    while (1) {
+        if (do_socklen(sock, 0) > 0) {
+            break;
+        }
+        if (duration(&t0) >= timeout) {
+            PRINTF("res_send: timeout %d\n", counter);
+            if (++counter > 4) {
+                PRINTF("DNS timeout\n");
+                do_close(sock);
+                return -1;
+            }
+            timeout += 100 * counter;
+        }
+    }
+
     n = do_recvfrom(sock, answer, anslen, 0, NULL, NULL);
     if (n < 0) {
         PRINTF("recvfrom\n");
