@@ -177,7 +177,6 @@ int main(int argc, char **argv)
             _dos_print("常駐している joynetd のバージョンが異なります\r\n");
             return 1;
         }
-        w5500_fin();
         if (data->vectno != 0) {
             _dos_intvcs(data->vectno, data->oldvect);
         }
@@ -212,6 +211,8 @@ int main(int argc, char **argv)
     init_etc_files();
     read_config();
 
+    w5500_fin();
+
     if (trap < -1) {    // 未使用のtrap番号を探す
         for (trap = 0; trap < 8; trap++) {
             if ((int)_dos_intvcg(trap + 0x20) >= 0x01000000) {
@@ -225,7 +226,6 @@ int main(int argc, char **argv)
     if (trap >= 0) {
         if ((int)_dos_intvcg(trap + 0x20) < 0x01000000) {
             _dos_print("指定されたtrap番号は既に使用されています\r\n");
-            w5500_fin();
             return 1;
         }
         extern int trap_entry(void);

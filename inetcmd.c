@@ -734,142 +734,198 @@ int do_command(void)
         : "=r" (cmd), "=r" (arg) : : "d0", "a0"
     );
 
+    int res = -1;
+
     PRINTF("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
+
+    w5500_ini();
 
     switch (cmd) {
     case -1:        // trap番号の取得
-        return trap_number;
+        res = trap_number;
+        break;
 
     case _TI_get_version:
-        return 0x00010000;  // (TBD) version
+        res = 0x00010000;  // (TBD) version
+        break;
 
     case _TI_add_arp_table:
     case _TI_del_arp_table:
     case _TI_search_arp_table:
-        return 0;
+        res = 0;
+        break;
     case _TI_get_arp_table_top:
-        return (int)&dummy_arp_table;
+        res = (int)&dummy_arp_table;
+        break;
     case _TI_arp_request:
-        return 0;
+        res = 0;
+        break;
 
     case _TI_get_iface_list:
     case _TI_get_new_iface:
     case _TI_link_new_iface:
-        return 0;
+        res = 0;
+        break;
 
     case _TI_rt_top:
     case _TI_rt_lookup:
     case _TI_rt_lookupb:
     case _TI_rt_drop:
     case _TI_rt_add:
-        return 0;
+        res = 0;
+        break;
 
     case _TI_dns_add:
     case _TI_dns_drop:
     case _TI_dns_get:
     case _TI_set_domain_name:
-        return 0;
+        res = 0;
+        break;
     case _TI_get_domain_name:
-        return (int)"";
+        res = (int)"";
+        break;
     case _TI_res_query:
-        return do_res_query((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
+        res = do_res_query((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
+        break;
     case _TI_res_search:
-        return do_res_search((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
+        res = do_res_search((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
+        break;
     case _TI_res_mkquery:
-        return do_res_mkquery(arg[0], (char *)arg[1], arg[2], arg[3],
-                              (char *)arg[4], arg[5],
-                              (struct rrec *)arg[6],
-                              (char *)arg[7], arg[8]);
+        res = do_res_mkquery(arg[0], (char *)arg[1], arg[2], arg[3],
+                             (char *)arg[4], arg[5],
+                             (struct rrec *)arg[6],
+                             (char *)arg[7], arg[8]);
+        break;
     case _TI_res_sendquery:
-        return do_res_send((char *)arg[0], arg[1], (char *)arg[2], arg[3]);
+        res = do_res_send((char *)arg[0], arg[1], (char *)arg[2], arg[3]);
+        break;
 
     case _TI_get_MIB:
-        return (int)&dummy_mib_array;
+        res = (int)&dummy_mib_array;
+        break;
 
     case _TI_socket:
-        return do_socket(arg[0], arg[1], arg[2]);
+        res = do_socket(arg[0], arg[1], arg[2]);
+        break;
     case _TI_bind:
-        return do_bind(arg[0], (const struct sockaddr *)arg[1], arg[2]);
+        res = do_bind(arg[0], (const struct sockaddr *)arg[1], arg[2]);
+        break;
     case _TI_listen:
-        return do_listen(arg[0], arg[1]);
+        res = do_listen(arg[0], arg[1]);
+        break;
     case _TI_accept:
-        return do_accept(arg[0], (struct sockaddr *)arg[1], (socklen_t *)arg[2]);
+        res = do_accept(arg[0], (struct sockaddr *)arg[1], (socklen_t *)arg[2]);
+        break;
     case _TI_connect:
-        return do_connect(arg[0], (const struct sockaddr *)arg[1], arg[2]);
+        res = do_connect(arg[0], (const struct sockaddr *)arg[1], arg[2]);
+        break;
     case _TI_read_s:
-        return do_read(arg[0], (void *)arg[1], arg[2]);
+        res = do_read(arg[0], (void *)arg[1], arg[2]);
+        break;
     case _TI_write_s:
-        return do_write(arg[0], (const void *)arg[1], arg[2]);
+        res = do_write(arg[0], (const void *)arg[1], arg[2]);
+        break;
     case _TI_recvfrom:
-        return do_recvfrom(arg[0], (void *)arg[1], arg[2],
-                           arg[3], (struct sockaddr *)arg[4], (socklen_t *)arg[5]);
+        res = do_recvfrom(arg[0], (void *)arg[1], arg[2],
+                          arg[3], (struct sockaddr *)arg[4], (socklen_t *)arg[5]);
+        break;
     case _TI_sendto:
-        return do_sendto(arg[0], (const void *)arg[1], arg[2],
-                         arg[3], (struct sockaddr *)arg[4], arg[5]);
+        res = do_sendto(arg[0], (const void *)arg[1], arg[2],
+                        arg[3], (struct sockaddr *)arg[4], arg[5]);
+        break;
     case _TI_close_s:
-        return do_close((int)arg);
+        res = do_close((int)arg);
+        break;
     case _TI_socklen:
-        return do_socklen(arg[0], arg[1]);
+        res = do_socklen(arg[0], arg[1]);
+        break;
     case _TI_getsockname:
-        return do_getsockname(arg[0], (char *)arg[1], (int *)arg[2]);
+        res = do_getsockname(arg[0], (char *)arg[1], (int *)arg[2]);
+        break;
     case _TI_getpeername:
-        return do_getpeername(arg[0], (char *)arg[1], arg[2]);
+        res = do_getpeername(arg[0], (char *)arg[1], arg[2]);
+        break;
     case _TI_sockkick:
-        return do_sockkick(arg[0]);
+        res = do_sockkick(arg[0]);
+        break;
     case _TI_shutdown:
-        return do_shutdown(arg[0], arg[1]);
+        res = do_shutdown(arg[0], arg[1]);
+        break;
     case _TI_usesock:
-        return do_usesock(arg[0]);
+        res = do_usesock(arg[0]);
+        break;
     case _TI_recvline:
-        return do_recvline(arg[0], (char *)arg[1], arg[2]);
+        res = do_recvline(arg[0], (char *)arg[1], arg[2]);
+        break;
     case _TI_sendline:
-        return do_sendline(arg[0], (const char *)arg[1], arg[2]);
+        res = do_sendline(arg[0], (const char *)arg[1], arg[2]);
+        break;
     case _TI_rrecvchar:
-        return do_rrecvchar(arg[0]);
+        res = do_rrecvchar(arg[0]);
+        break;
     case _TI_recvchar:
-        return do_recvchar(arg[0]);
+        res = do_recvchar(arg[0]);
+        break;
     case _TI_usflush:
-        return do_usflush(arg[0]);
+        res = do_usflush(arg[0]);
+        break;
     case _TI_seteol:
-        return do_seteol(arg[0], (char *)arg[1]);
+        res = do_seteol(arg[0], (char *)arg[1]);
+        break;
     case _TI_sockmode:
-        return do_sockmode(arg[0], arg[1]);
+        res = do_sockmode(arg[0], arg[1]);
+        break;
     case _TI_setflush:
-        return do_setflush(arg[0], arg[1]);
+        res = do_setflush(arg[0], arg[1]);
+        break;
     case _TI_psocket:
-        return do_psocket(arg);
+        res = do_psocket(arg);
+        break;
     case _TI_sockerr:
-        return (int)do_sockerr((int)arg);
+        res = (int)do_sockerr((int)arg);
+        break;
     case _TI_sockstate:
-        return (int)do_sockstate((int)arg);
+        res = (int)do_sockstate((int)arg);
+        break;
 
     case _TI_sock_top:
-        return (int)&usock_array;
+        res = (int)&usock_array;
+        break;
     case _TI_ntoa_sock:
-        return 0;
+        res = 0;
+        break;
 
     case _TI_gethostbyname:
-        return (int)do_gethostbyname((const char *)arg);
+        res = (int)do_gethostbyname((const char *)arg);
+        break;
     case _TI_gethostbyaddr:
-        return (int)do_gethostbyaddr((const char *)arg[0], arg[1], arg[2]);
+        res = (int)do_gethostbyaddr((const char *)arg[0], arg[1], arg[2]);
+        break;
     case _TI_getnetbyname:
-        return (int)do_getnetbyname((const char *)arg);
+        res = (int)do_getnetbyname((const char *)arg);
+        break;
     case _TI_getnetbyaddr:
-        return (int)do_getnetbyaddr(arg[0], arg[1]);
+        res = (int)do_getnetbyaddr(arg[0], arg[1]);
+        break;
     case _TI_getservbyname:
-        return (int)do_getservbyname((const char *)arg[0], (const char *)arg[1]);
+        res = (int)do_getservbyname((const char *)arg[0], (const char *)arg[1]);
+        break;
     case _TI_getservbyport:
-        return (int)do_getservbyport(arg[0], (const char *)arg[1]);
+        res = (int)do_getservbyport(arg[0], (const char *)arg[1]);
+        break;
     case _TI_getprotobyname:
-        return (int)do_getprotobyname((const char *)arg);
+        res = (int)do_getprotobyname((const char *)arg);
+        break;
     case _TI_getprotobynumber:
-        return (int)do_getprotobynumber((int)arg);
+        res = (int)do_getprotobynumber((int)arg);
+        break;
 
     case _TI_rip:
-        return -1;
     default:
         break;
     }
 
-    return -1;
+    w5500_fin();
+
+    return res;
 }
