@@ -63,6 +63,7 @@ typedef struct {
     unsigned short class;
 } DNSQuestion;
 
+// DNS Cache Entry
 struct dns_cache_entry {
     struct dns_cache_entry *next;
     char *dname;
@@ -79,9 +80,9 @@ struct dns_cache_entry {
 
 extern uint8_t w5500_dns[4];
 
-char *domainname = NULL;
+static char *domainname = NULL;
 
-struct dns_cache_entry *dns_cache = NULL;
+static struct dns_cache_entry *dns_cache = NULL;
 static int dns_cache_count = 0;
 
 //****************************************************************************
@@ -189,6 +190,27 @@ static struct dns_cache_entry *find_dns_cache(char *dname, int class, int type)
 // Public functions
 //****************************************************************************
 
+int do_set_domain_name(char *name)
+{
+    PRINTF("joynetd: set_domain_name(%s)\n", name);
+
+    if (domainname != NULL) {
+        free(domainname);
+    }
+    domainname = (char *)malloc(strlen(name) + 1);
+    if (domainname == NULL) {
+        return -1;
+    }
+    strcpy(domainname, name);
+    return 0;
+}
+
+char *do_get_domain_name(void)
+{
+    PRINTF("joynetd: get_domain_name()\n");
+    return domainname ? domainname : "";
+}
+
 int do_res_query(char *dname, int class, int type, unsigned char *answer, int anslen)
 {
     PRINTF("joynetd: res_query(%s, %d, %d, %p, %d)\n", dname, class, type, answer, anslen);
@@ -248,9 +270,10 @@ int do_res_mkquery(int op, char *dname, int class, int type, char *data, int dat
 
     DNSHeader *header = (DNSHeader *)buf;
     unsigned char *qname = (unsigned char *)buf + sizeof(DNSHeader);
-    
+
+    struct iocs_time t0 = _iocs_ontime();
     memset(header, 0, sizeof(DNSHeader));
-    header->id = htons(1);      // TBD
+    header->id = htons(t0.sec);
     header->flags = htons(0x0100);  // Standard query
     header->qdcount = htons(1);
 
@@ -293,55 +316,67 @@ int do_res_send(char *msg, int msglen, char *answer, int anslen)
 {
     PRINTF("joynetd: res_send(%p, %d, %p, %d)\n", msg, msglen, answer, anslen);
 
+    if (msglen < sizeof(DNSHeader)) {
+        PRINTF("Invalid DNS message length\n");
+        return -1;
+    }
+    uint16_t id = ntohs(((DNSHeader *)msg)->id);
+
     // Create UDP socket
     int sock = do_socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         PRINTF("socket\n");
         return -1;
     }
-    
-    // Send to DNS server
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(DNS_PORT);
-    memcpy(&server_addr.sin_addr, w5500_dns, 4);
-    
-    ssize_t n = do_sendto(sock, msg, msglen, 0,
-                          (struct sockaddr *)&server_addr, sizeof(server_addr));
-    if (n < 0) {
-        PRINTF("sendto\n");
-        do_close(sock);
-        return -1;
-    }
-    
-    // Receive response
 
-    struct iocs_time t0 = _iocs_ontime();
-    int timeout = 100 * 1;
-    int counter = 0;
-
-    while (1) {
-        if (do_socklen(sock, 0) > 0) {
-            break;
+    ssize_t n;
+    do {
+        // Send to DNS server
+        struct sockaddr_in server_addr;
+        memset(&server_addr, 0, sizeof(server_addr));
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_port = htons(DNS_PORT);
+        memcpy(&server_addr.sin_addr, w5500_dns, 4);
+        
+        n = do_sendto(sock, msg, msglen, 0,
+                      (struct sockaddr *)&server_addr, sizeof(server_addr));
+        if (n < 0) {
+            PRINTF("sendto\n");
+            do_close(sock);
+            return -1;
         }
-        if (duration(&t0) >= timeout) {
-            PRINTF("res_send: timeout %d\n", counter);
-            if (++counter > 4) {
-                PRINTF("DNS timeout\n");
-                do_close(sock);
-                return -1;
+
+        // Receive response
+        struct iocs_time t0 = _iocs_ontime();
+        int timeout = 100 * 1;
+        int counter = 0;
+
+        while (1) {
+            if (do_socklen(sock, 0) > 0) {
+                break;
             }
-            timeout += 100 * counter;
+            if (duration(&t0) >= timeout) {
+                PRINTF("res_send: timeout %d\n", counter);
+                if (++counter > 4) {
+                    PRINTF("DNS timeout\n");
+                    do_close(sock);
+                    return -1;
+                }
+                timeout += 100 * counter;
+            }
         }
-    }
 
-    n = do_recvfrom(sock, answer, anslen, 0, NULL, NULL);
-    if (n < 0) {
-        PRINTF("recvfrom\n");
-        do_close(sock);
-        return -1;
-    }
+        n = do_recvfrom(sock, answer, anslen, 0, NULL, NULL);
+        if (n < 0) {
+            PRINTF("recvfrom\n");
+            do_close(sock);
+            return -1;
+        }
+        if (n < sizeof(DNSHeader)) {
+            PRINTF("res_send: response too short\n");
+            continue;
+        }
+    } while (ntohs(((DNSHeader *)answer)->id) != id);
 
     do_close(sock);
     return n;

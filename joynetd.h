@@ -57,6 +57,8 @@ int do_psocket(long *arg);
 
 // inetdns.c
 struct rrec;
+int do_set_domain_name(char *name);
+char *do_get_domain_name(void);
 int do_res_query(char *dname, int class, int type, unsigned char *answer, int anslen);
 int do_res_search(char *dname, int class, int type, unsigned char *answer, int anslen);
 int do_res_mkquery(int op, char *dname, int class, int type, char *data, int datalen,

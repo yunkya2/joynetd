@@ -779,10 +779,10 @@ int do_command(void)
     case _TI_dns_drop:
     case _TI_dns_get:
     case _TI_set_domain_name:
-        res = 0;
+        res = do_set_domain_name((char *)arg);
         break;
     case _TI_get_domain_name:
-        res = (int)"";
+        res = (int)do_get_domain_name();
         break;
     case _TI_res_query:
         res = do_res_query((char *)arg[0], arg[1], arg[2], (unsigned char *)arg[3], arg[4]);
