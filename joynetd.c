@@ -52,6 +52,7 @@ struct joynetd_data {
     void *memblock;
     int vectno;
     void *oldvect;
+    void *oldvect_joy;
 };
 
 #define JOYNET_MAGIC    0x4a4f5901  // "JOY\1"
@@ -61,6 +62,11 @@ struct joynetd_data {
 //****************************************************************************
 
 extern struct dos_devheader devheader;  // Human68kのデバイスヘッダ
+
+extern int joyget();
+extern uint16_t joyget_stat;
+extern uint16_t joyget_port;
+extern void *joyget_org;
 
 struct joynetd_data joynetd_data = {
     .magic = JOYNET_MAGIC,
@@ -162,6 +168,8 @@ int main(int argc, char **argv)
     }
 
     w5500_select(port);
+    joyget_stat = 0x4b00 + port;
+    joyget_port = port - 1;
 
     _dos_super(0);
 
@@ -180,6 +188,7 @@ int main(int argc, char **argv)
         if (data->vectno != 0) {
             _dos_intvcs(data->vectno, data->oldvect);
         }
+        _dos_intvcs(0x013b, data->oldvect_joy);
         prev->next = prev->next->next;
         _dos_print("joynetd を常駐解除しました\r\n");
         _dos_mfree(data->memblock);
@@ -236,6 +245,8 @@ int main(int argc, char **argv)
     PRINTF("joynetd: using trap number %d\n", trap_number);
 
     joynetd_data.memblock = _dos_getpdb();
+    joynetd_data.oldvect_joy = _dos_intvcs(0x013b, joyget);
+    joyget_org = joynetd_data.oldvect_joy;
 
     prev = find_devheader(NULL);
     prev->next = &devheader;
