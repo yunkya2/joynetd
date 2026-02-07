@@ -44,6 +44,8 @@
 
 #define DNS_PORT 53
 #define MAX_RESPONSE_SIZE 512
+#define DNS_CACHE_MAX_ENTRIES 8
+#define DNS_CACHE_EXPIRE_TIME (100 * 60 * 5)  // 5 minutes
 
 // DNS Header
 typedef struct {
@@ -61,11 +63,26 @@ typedef struct {
     unsigned short class;
 } DNSQuestion;
 
+struct dns_cache_entry {
+    struct dns_cache_entry *next;
+    char *dname;
+    int type;
+    int class;
+    unsigned char *answer;
+    int anslen;
+    struct iocs_time timestamp;
+};
+
 //****************************************************************************
 // Global variables
 //****************************************************************************
 
 extern uint8_t w5500_dns[4];
+
+char *domainname = NULL;
+
+struct dns_cache_entry *dns_cache = NULL;
+static int dns_cache_count = 0;
 
 //****************************************************************************
 // Private functions
@@ -79,6 +96,95 @@ static inline unsigned int duration(struct iocs_time *t0)
            (now.day - t0->day) * 24 * 60 * 60 * 100;
 }
 
+static void remove_dns_cache_entry(struct dns_cache_entry *entry, struct dns_cache_entry *prev)
+{
+    // Remove from list
+    if (prev != NULL) {
+        prev->next = entry->next;
+    } else {
+        dns_cache = entry->next;
+    }
+    // Free memory
+    if (entry->dname != NULL) free(entry->dname);
+    if (entry->answer != NULL) free(entry->answer);
+    free(entry);
+    dns_cache_count--;
+}
+
+static void add_dns_cache_entry(char *dname, int class, int type, unsigned char *answer, int anslen)
+{
+    struct dns_cache_entry *new_entry = (struct dns_cache_entry *)malloc(sizeof(struct dns_cache_entry));
+    if (new_entry == NULL) {
+        return;
+    }
+
+    new_entry->dname = (char *)malloc(strlen(dname) + 1);
+    new_entry->answer = (unsigned char *)malloc(anslen);
+    if (new_entry->dname == NULL || new_entry->answer == NULL) {
+        if (new_entry->dname != NULL) free(new_entry->dname);
+        if (new_entry->answer != NULL) free(new_entry->answer);
+        free(new_entry);
+        return;
+    }
+
+    strcpy(new_entry->dname, dname);
+    memcpy(new_entry->answer, answer, anslen);
+    new_entry->type = type;
+    new_entry->class = class;
+    new_entry->anslen = anslen;
+    new_entry->timestamp = _iocs_ontime();
+    new_entry->next = dns_cache;
+    dns_cache = new_entry;
+    dns_cache_count++;
+    
+    // Remove oldest entry if cache is full
+    if (dns_cache_count > DNS_CACHE_MAX_ENTRIES) {
+        struct dns_cache_entry *curr = dns_cache;
+        struct dns_cache_entry *prev = NULL;
+        while (curr->next != NULL) {
+            prev = curr;
+            curr = curr->next;
+        }
+        if (prev != NULL) {
+            remove_dns_cache_entry(curr, prev);
+        }
+    }
+}
+
+static struct dns_cache_entry *find_dns_cache(char *dname, int class, int type)
+{
+    struct dns_cache_entry *entry = dns_cache;
+    struct dns_cache_entry *prev = NULL;
+    
+    while (entry != NULL) {
+        struct dns_cache_entry *next = entry->next;
+        
+        // Check if entry has expired
+        if (duration(&entry->timestamp) >= DNS_CACHE_EXPIRE_TIME) {
+            PRINTF("Cache entry expired: %s\n", entry->dname);
+            // Remove expired entry
+            remove_dns_cache_entry(entry, prev);
+            entry = next;
+            continue;
+        }
+        
+        if (strcasecmp(entry->dname, dname) == 0 &&
+            entry->class == class &&
+            entry->type == type) {
+            // Move to the head (without updating timestamp)
+            if (prev != NULL) {
+                prev->next = entry->next;
+                entry->next = dns_cache;
+                dns_cache = entry;
+            }
+            return entry;
+        }
+        prev = entry;
+        entry = next;
+    }
+    return NULL;
+}
+
 //****************************************************************************
 // Public functions
 //****************************************************************************
@@ -87,6 +193,18 @@ int do_res_query(char *dname, int class, int type, unsigned char *answer, int an
 {
     PRINTF("joynetd: res_query(%s, %d, %d, %p, %d)\n", dname, class, type, answer, anslen);
 
+    // Check cache first
+    struct dns_cache_entry *entry = find_dns_cache(dname, class, type);
+    if (entry != NULL) {
+        PRINTF("Found in cache\n");
+        // Copy cached answer to answer buffer
+        if (entry->anslen <= anslen) {
+            memcpy(answer, entry->answer, entry->anslen);
+            return entry->anslen;
+        }
+        return 0; // Buffer too small
+    }
+
     uint8_t query[512];
     int qlen = do_res_mkquery(0, dname, class, type, NULL, 0, NULL, (char *)query, sizeof(query));
     if (qlen < 0) {
@@ -98,6 +216,10 @@ int do_res_query(char *dname, int class, int type, unsigned char *answer, int an
         PRINTF("res_send failed\n");
         return 0;
     }
+
+    // Cache the result
+    add_dns_cache_entry(dname, class, type, answer, rlen);
+
     return rlen;
 }
 
@@ -105,18 +227,17 @@ int do_res_search(char *dname, int class, int type, unsigned char *answer, int a
 {
     PRINTF("joynetd: res_search(%s, %d, %d, %p, %d)\n", dname, class, type, answer, anslen);
 
-    uint8_t query[512];
-    int qlen = do_res_mkquery(0, dname, class, type, NULL, 0, NULL, (char *)query, sizeof(query));
-    if (qlen < 0) {
-        PRINTF("mkquery failed\n");
-        return 0;
+    // If dname does not contain '.', append domainname
+    if (strchr(dname, '.') == NULL && domainname != NULL && *domainname != '\0') {
+        char fullname[256];
+        strncpy(fullname, dname, sizeof(fullname) - 1);
+        fullname[sizeof(fullname) - 1] = '\0';
+        strncat(fullname, ".", sizeof(fullname) - strlen(fullname) - 1);
+        strncat(fullname, domainname, sizeof(fullname) - strlen(fullname) - 1);
+        return do_res_query(fullname, class, type, answer, anslen);
     }
-    int rlen = do_res_send((char *)query, qlen, (char *)answer, anslen);
-    if (rlen < 0) {
-        PRINTF("res_send failed\n");
-        return 0;
-    }
-    return rlen;
+
+    return do_res_query(dname, class, type, answer, anslen);
 }
 
 int do_res_mkquery(int op, char *dname, int class, int type, char *data, int datalen,
