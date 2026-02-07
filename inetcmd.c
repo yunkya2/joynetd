@@ -82,6 +82,8 @@ typedef struct usock
 // Global variables
 //****************************************************************************
 
+extern int trap_number;
+
 #define ARPSIZE 17
 void *dummy_arp_table[ARPSIZE];
 
@@ -736,7 +738,7 @@ int do_command(void)
 
     switch (cmd) {
     case -1:        // trap番号の取得
-        return -1;  // trap未対応
+        return trap_number;
 
     case _TI_get_version:
         return 0x00010000;  // (TBD) version
