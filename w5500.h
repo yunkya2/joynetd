@@ -94,6 +94,13 @@ void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len);
 
 #define W5500_N_SOCKETS     8
 
+// Socket n Mode bits (W5500_Sn_MR)
+#define W5500_Sn_MR_CLOSE       0x00
+#define W5500_Sn_MR_TCP         0x01
+#define W5500_Sn_MR_UDP         0x02
+#define W5500_Sn_MR_IPRAW       0x03
+#define W5500_Sn_MR_MACRAW      0x04
+
 // Socket n Command code (W5500_Sn_CR)
 #define W5500_Sn_CR_OPEN        0x01
 #define W5500_Sn_CR_LISTEN      0x02
