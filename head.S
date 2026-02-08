@@ -22,11 +22,14 @@
  * THE SOFTWARE.
  */
 
+    .section    ".header","ax"
+
+/* TCP/IP driver header */
+
+    .global tcpip_magic
     .global jsr_entry
     .global trap_entry
     .extern do_command
-
-    .section    ".header","ax"
 
 tcpip_magic:
     .ascii  "TCP/IP\x02\x00"
@@ -100,5 +103,51 @@ joyget:
 joyget_stat:   .word  0
 joyget_port:   .word  0
 joyget_org:    .long  0
+
+
+/* C startup routine */
+
+    .global _start
+    .extern _ENV0
+    .extern _HSTA
+    .extern _HEND
+    .extern _cmdline
+    .extern _heap_size
+    .extern _stack_size
+    .extern __crt1_startup
+
+_start:
+    move.l  %a0, _MCB               // MCB
+    lea.l   %a0@(0x100), %a5
+    move.l  %a5, _PSTA              // TEXT Start
+    move.l  %a0@(0x30), %d0
+    move.l  %d0, _PEND              // TEXT End
+    move.l  %d0, _BSTA              // BSS Start
+    move.l  %a1, _BEND              // BSS End
+
+    lea.l   %a0@(0x10), %a5
+    move.l  %a5, _PSP
+
+    move.l  %a3, _ENV0
+    move.l  %a2, _cmdline
+    move.l  %a1,_HSTA
+    add.l   _heap_size,%a1
+    move.l  %a1,_HEND               // setup heap
+    add.l   _stack_size,%a1
+    cmpa.l  %a0@(8),%a1             // memory block bottom
+    bhi     out_of_memory
+
+    move.l  %a1,%sp                 // setup stack
+    jmp     __crt1_startup          // Human initialization
+
+out_of_memory:
+    pea.l   %pc@(oom_msg)
+    .short  0xff09                  // print
+    addq.l  #4,%sp
+    move.w  #0x007f,%sp@-
+    .short  0xff4c                  // exit2
+
+oom_msg:
+    .asciz  "Out of memory. Program terminated.\r\n"
 
     .end

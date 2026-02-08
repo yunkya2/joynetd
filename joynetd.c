@@ -253,5 +253,9 @@ int main(int argc, char **argv)
 
     _dos_print("joynetd が常駐しました\r\n");
 
-    _dos_keeppr(0xffffff, 0);  // ヒープ領域の末尾までを常駐
+    // ヒープ領域の末尾までを常駐して終了する
+    // (ヒープの後ろにあるスタック領域は常駐しない)
+    extern char *tcpip_magic;
+    extern char *_HEND;
+    _dos_keeppr((int)_HEND - (int)&tcpip_magic, 0);
 }

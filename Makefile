@@ -46,7 +46,7 @@ LIBS += -lsocket
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) -nostartfiles
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
