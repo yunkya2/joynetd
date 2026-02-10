@@ -135,13 +135,14 @@ static int wait_data(int blk_sreg, int reg, int status)
 #ifdef DEBUG
         PRINTF("%d ", len); fflush(stdout);
 #endif
-        if (w5500_read_b(W5500_Sn_SR, blk_sreg) != status) {
-            PRINTF("socket closed during read\n");
-            return -1;
+        if (len > 0) {
+            PRINTF("\n");
+            return len;
         }
-    } while (len == 0);
-    PRINTF("\n");
-    return len;
+    } while (w5500_read_b(W5500_Sn_SR, blk_sreg) == status);
+
+    PRINTF("socket closed\n");
+    return -1;
 }
 
 static inline int validate_sockfd(int sockfd)
