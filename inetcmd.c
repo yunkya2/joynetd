@@ -49,8 +49,14 @@
 #define TYPE_RAW            3
 #define TYPE_LOCAL_STREAM   4
 #define TYPE_LOCAL_DGRAM    5
+
+#define	SOCK_BINARY	0	/* socket in raw (binary) mode */
+#define	SOCK_ASCII	1	/* socket in cooked (newline mapping) mode */
+#define	SOCK_QUERY	2	/* Return setting without change */
+
 #define SOCKBASE 128
 #define DEFNSOCK 32
+
 typedef struct usock
 {
     int     refcnt;
@@ -230,6 +236,10 @@ int do_socket(int domain, int type, int protocol)
             }
             u->type = socket_type;
             u->refcnt = 1;
+            u->noblock = 0;
+            u->rdysock = 1;
+            u->flush = '\n';
+            strcpy(u->eol, "\r\n");
             usock_port[i] = port;
             w5500_write_b(W5500_Sn_IR, 1, 0x1f); // S0_IR clear
             return SOCKBASE + i;
@@ -657,40 +667,15 @@ int do_usesock(int sockfd)
     return 0;
 }
 
-int do_recvline(int sockfd, char *buf, size_t len)
-{
-    PRINTF("joynetd: recvline(%d, %p, %lu)\n", sockfd, buf, len);
-
-    int sno = validate_sockfd(sockfd);
-    if (sno < 0) {
-        return -1;  // EBADF
-    }
-
-    return 0;
-}
-
-int do_sendline(int sockfd, const char *buf, size_t len)
-{
-    PRINTF("joynetd: sendline(%d, %p, %lu)\n", sockfd, buf, len);
-
-    int sno = validate_sockfd(sockfd);
-    if (sno < 0) {
-        return -1;  // EBADF
-    }
-
-    return 0;
-}
-
 int do_rrecvchar(int sockfd)
 {
     PRINTF("joynetd: rrecvchar(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
-    if (sno < 0) {
-        return -1;  // EBADF
+    uint8_t c;
+    if (do_recvfrom(sockfd, &c, 1, 0, NULL, NULL) != 1) {
+        return -1;
     }
-
-    return 0;
+    return c;
 }
 
 int do_recvchar(int sockfd)
@@ -702,7 +687,54 @@ int do_recvchar(int sockfd)
         return -1;  // EBADF
     }
 
-    return 0;
+    usock *u = &usock_array[sno];
+    if (u->flag == SOCK_BINARY) {
+        return do_rrecvchar(sockfd);
+    } else {
+        int c;
+        c = do_rrecvchar(sockfd);
+        if (c < 0) {
+            return -1;
+        } else if (c != u->eol[0]) {
+            return c;
+        } else if (u->eol[1] == '\0') {
+            return '\n';
+        }
+
+        c = do_rrecvchar(sockfd);
+        if (c < 0) {
+            return -1;
+        } else if (c != u->eol[1]) {
+            return c;
+        } else {
+            return '\n';
+        }
+    }
+}
+
+int do_recvline(int sockfd, char *buf, size_t len)
+{
+    PRINTF("joynetd: recvline(%d, %p, %lu)\n", sockfd, buf, len);
+
+    char *p = buf;
+    while (len > 0) {
+        int c = do_recvchar(sockfd);
+        if (c < 0) {
+            return -1;
+        }
+        *p++ = c;
+        len--;
+        if (c == '\n') {
+            break;
+        }
+    }
+    return p - buf;
+}
+
+int do_sendline(int sockfd, const char *buf, size_t len)
+{
+    PRINTF("joynetd: sendline(%d, %p, %lu)\n", sockfd, buf, len);
+    return -1;  // 未実装API
 }
 
 int do_usflush(int sockfd)
@@ -726,6 +758,10 @@ int do_seteol(int sockfd, char *seq)
         return -1;  // EBADF
     }
 
+    usock *u = &usock_array[sno];
+    strncpy(u->eol, seq, 2);
+    u->eol[2] = '\0';
+
     return 0;
 }
 
@@ -738,7 +774,12 @@ int do_sockmode(int sockfd, int mode)
         return -1;  // EBADF
     }
 
-    return 0;
+    usock *u = &usock_array[sno];
+    int oldmode = u->flag;
+    if (mode == SOCK_BINARY || mode == SOCK_ASCII) {
+        u->flag = mode;
+    }
+    return oldmode;
 }
 
 int do_setflush(int sockfd, int chr)
