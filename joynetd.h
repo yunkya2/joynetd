@@ -53,7 +53,6 @@ int do_socklen(int sockfd, int mode);
 int do_seteol(int sockfd, char *seq);
 int do_sockmode(int sockfd, int mode);
 int do_setflush(int sockfd, int chr);
-int do_psocket(long *arg);
 
 // inetdns.c
 struct rrec;

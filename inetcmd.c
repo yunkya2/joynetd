@@ -586,7 +586,6 @@ int do_socklen(int sockfd, int mode)
     }
 
     int blk_sreg = sno * 4 + 1;
-
     switch (mode) {
     case 0:     // get receive data size
         PRINTF("--> %d\n", w5500_read_w(W5500_Sn_RX_RSR, blk_sreg));
@@ -607,9 +606,7 @@ int do_getsockname(int sockfd, char *name, int *namelen)
         return -1;  // EBADF
     }
 
-    usock *u = &usock_array[sno];
     int blk_sreg = sno * 4 + 1;
-
     if (name != NULL && namelen != NULL && *namelen >= sizeof(struct sockaddr_in)) {
         struct sockaddr_in *sin = (struct sockaddr_in *)name;
         sin->sin_family = AF_INET;
@@ -630,9 +627,7 @@ int do_getpeername(int sockfd, char *peer, int *peerlen)
         return -1;  // EBADF
     }
 
-    usock *u = &usock_array[sno];
     int blk_sreg = sno * 4 + 1;
-
     if (peer != NULL && peerlen != NULL && *peerlen >= sizeof(struct sockaddr_in)) {
         struct sockaddr_in *sin = (struct sockaddr_in *)peer;
         sin->sin_family = AF_INET;
@@ -816,10 +811,10 @@ int do_setflush(int sockfd, int chr)
     return 0;
 }
 
-int do_psocket(long *arg)
+char *do_psocket(long *arg)
 {
     PRINTF("joynetd: psocket(%p)\n", arg);
-    return (int)arg;
+    return "";
 }
 
 char *do_sockerr(int sockfd)
@@ -843,7 +838,39 @@ char *do_sockstate(int sockfd)
         return NULL;    // EBADF
     }
 
-    return "";
+    int blk_sreg = sno * 4 + 1;
+    switch (w5500_read_b(W5500_Sn_SR, blk_sreg)) {
+    case W5500_Sn_SR_CLOSED:
+        return "CLOSED";
+    case W5500_Sn_SR_INIT:
+        return "INIT";
+    case W5500_Sn_SR_LISTEN:
+        return "LISTEN";
+    case W5500_Sn_SR_SYNSENT:
+        return "SYNSENT";
+    case W5500_Sn_SR_SYNRECV:
+        return "SYNRECV";
+    case W5500_Sn_SR_ESTABLISHED:
+        return "ESTABLISHED";
+    case W5500_Sn_SR_FIN_WAIT:
+        return "FIN_WAIT";
+    case W5500_Sn_SR_CLOSING:
+        return "CLOSING";
+    case W5500_Sn_SR_TIME_WAIT:
+        return "TIME_WAIT";
+    case W5500_Sn_SR_CLOSE_WAIT:
+        return "CLOSE_WAIT";
+    case W5500_Sn_SR_LAST_ACK:
+        return "LAST_ACK";
+    case W5500_Sn_SR_UDP:
+        return "UDP";
+    case W5500_Sn_SR_IPRAW:
+        return "IPRAW";
+    case W5500_Sn_SR_MACRAW:
+        return "MACRAW";
+    default:
+        return "";
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1004,7 +1031,7 @@ int do_command(void)
         res = do_setflush(arg[0], arg[1]);
         break;
     case _TI_psocket:
-        res = do_psocket(arg);
+        res = (int)do_psocket(arg);
         break;
     case _TI_sockerr:
         res = (int)do_sockerr((int)arg);
