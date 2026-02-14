@@ -104,6 +104,8 @@ void read_config(void)
                     w5500_dns.b[i] = strtoul(p, &q, 0);
                     p = q + 1;
                 }
+            } else if (strncasecmp(line, "domain=", 7) == 0) {
+                do_set_domain_name(&line[7]);
             }
         }
         fclose(fp);
