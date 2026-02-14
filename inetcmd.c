@@ -100,7 +100,8 @@ struct {
 
 usock usock_array[DEFNSOCK];
 
-static int current_eph_port = EPH_PORT_BEGIN;
+static in_port_t current_eph_port = EPH_PORT_BEGIN;
+static in_port_t usock_port[W5500_N_SOCKETS];
 
 //****************************************************************************
 // Private functions
@@ -178,14 +179,14 @@ int do_socket(int domain, int type, int protocol)
                 if (current_eph_port >= EPH_PORT_END) {
                     current_eph_port = EPH_PORT_BEGIN;
                 }
-                int i;
-                for (i = 0; i < W5500_N_SOCKETS; i++) {
-                    usock *ua = &usock_array[i];
-                    if ((int)ua->p == port) {
+                int j;
+                for (j = 0; j < W5500_N_SOCKETS; j++) {
+                    usock *ua = &usock_array[j];
+                    if (i != j && ua->type != NOTUSED && usock_port[j] == port) {
                         break;
                     }
                 }
-                if (i == W5500_N_SOCKETS) {
+                if (j == W5500_N_SOCKETS) {
                     break;
                 }
             }
@@ -229,7 +230,7 @@ int do_socket(int domain, int type, int protocol)
             }
             u->type = socket_type;
             u->refcnt = 1;
-            u->p = (void *)port;    // TBD
+            usock_port[i] = port;
             w5500_write_b(W5500_Sn_IR, 1, 0x1f); // S0_IR clear
             return SOCKBASE + i;
         }
@@ -251,9 +252,9 @@ int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     switch (u->type) {
     case TYPE_TCP:
-        break;
     case TYPE_UDP:
     case TYPE_RAW:
+        break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
         return -1;  // EPROTOTYPE
@@ -338,10 +339,9 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     switch (u->type) {
     case TYPE_TCP:
-        break;
     case TYPE_UDP:
-        // TBD: use addr to set default destination for UDP socket
     case TYPE_RAW:
+        break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
         return -1;  // EPROTOTYPE
@@ -350,6 +350,10 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     struct sockaddr_in *sin = (struct sockaddr_in *)addr;
     w5500_write_l(W5500_Sn_DIPR, blk_sreg, ntohl(sin->sin_addr.s_addr));
     w5500_write_w(W5500_Sn_DPORT, blk_sreg, ntohs(sin->sin_port));
+
+    if (u->type != TYPE_TCP) {
+        return 0;
+    }
 
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CONNECT);
     if (wait_status(blk_sreg, W5500_Sn_SR_ESTABLISHED) < 0) {
@@ -360,94 +364,6 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     PRINTF("S0_IR=%02x\n", w5500_read_b(W5500_Sn_IR, blk_sreg));
     return 0;
-}
-
-ssize_t do_read(int sockfd, void *buf, size_t count)
-{
-    PRINTF("joynetd: read(%d, %p, %lu)\n", sockfd, buf, count);
-
-    int sno = validate_sockfd(sockfd);
-    if (sno < 0) {
-        return -1;  // EBADF
-    }
-
-    int blk_sreg = sno * 4 + 1;
-    int blk_rxbuf = sno * 4 + 3;
-    usock *u = &usock_array[sno];
-
-    switch (u->type) {
-    case TYPE_TCP:
-        break;
-    case TYPE_UDP:
-        // TBD: use default destination for UDP socket
-    case TYPE_RAW:
-    default:
-        PRINTF("joynetd: unsupported socket type %d\n", u->type);
-        return -1;  // EPROTOTYPE
-    }
-
-    PRINTF("  Sn_RX_RSR=");
-    int len = wait_data(blk_sreg, W5500_Sn_RX_RSR, W5500_Sn_SR_ESTABLISHED);
-    if (len < 0) {
-        return -1;
-    }
-    len = (count < len) ? count : len;
-
-    int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
-    PRINTF("  Sn_RX_RD=0x%x\n", ptr);
-    w5500_read(ptr, blk_rxbuf, (uint8_t *)buf, len);
-    ptr += len;
-    w5500_write_w(W5500_Sn_RX_RD, blk_sreg, ptr);
-    PRINTF("  Sn_RX_RD=0x%x\n", ptr);
-    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_RECV);
-    return len;
-}
-
-ssize_t do_write(int sockfd, const void *buf, size_t count)
-{
-    PRINTF("joynetd: write(%d, %p, %lu)\n", sockfd, buf, count);
-
-    int sno = validate_sockfd(sockfd);
-    if (sno < 0) {
-        return -1;  // EBADF
-    }
-
-    int blk_sreg = sno * 4 + 1;
-    int blk_txbuf = sno * 4 + 2;
-    ssize_t written = 0;
-    usock *u = &usock_array[sno];
-
-    switch (u->type) {
-    case TYPE_TCP:
-        break;
-    case TYPE_UDP:
-        // TBD: use default destination for UDP socket
-    case TYPE_RAW:
-    default:
-        PRINTF("joynetd: unsupported socket type %d\n", u->type);
-        return -1;  // EPROTOTYPE
-    }
-
-    while (count > 0) {
-        PRINTF("  Sn_TX_FSR=");
-        int len = wait_data(blk_sreg, W5500_Sn_TX_FSR, W5500_Sn_SR_ESTABLISHED);
-        if (len < 0) {
-            return -1;
-        }
-        len = (count < len) ? count : len;
-
-        int ptr = w5500_read_w(W5500_Sn_TX_WR, blk_sreg);
-        PRINTF("  Sn_TX_WR=0x%x\n", ptr);
-        w5500_write(ptr, blk_txbuf, (uint8_t *)buf, len);
-        ptr += len;
-        buf += len;
-        count -= len;
-        written += len;
-        w5500_write_w(W5500_Sn_TX_WR, blk_sreg, ptr);
-        PRINTF("  Sn_TX_WR=0x%x\n", ptr);
-        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_SEND);
-    }
-    return written;
 }
 
 ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
@@ -480,6 +396,13 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
     } packet_info;
 
     switch (u->type) {
+    case TYPE_TCP:
+        socket_stat = W5500_Sn_SR_ESTABLISHED;
+        packet_info_size = 0;
+        packet_info_len = NULL;
+        src_addr = NULL;    // アドレス指定は無視する
+        addrlen = NULL;
+        break;
     case TYPE_UDP:
         socket_stat = W5500_Sn_SR_UDP;
         packet_info_size = sizeof(packet_info.udp);
@@ -490,11 +413,6 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
         packet_info_size = sizeof(packet_info.ipraw);
         packet_info_len = &packet_info.ipraw.len;
         break;
-    case TYPE_TCP:
-        socket_stat = W5500_Sn_SR_ESTABLISHED;
-        packet_info_size = 0;
-        packet_info_len = NULL;
-        break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
         return -1;  // EPROTOTYPE
@@ -503,12 +421,13 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
     PRINTF("  Sn_RX_RSR=");
     int bytes = wait_data(blk_sreg, W5500_Sn_RX_RSR, socket_stat);
     if (bytes < 0) {
-        return -1;
+        return 0;
     }
 
     int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
     PRINTF("  Sn_RX_RD=0x%x\n", ptr);
 
+    // UDP/IPRAWの場合は付加情報を先に読む
     if (packet_info_size > 0) {
         w5500_read(ptr, blk_rxbuf, (uint8_t *)&packet_info, packet_info_size);
         ptr += packet_info_size;
@@ -516,6 +435,7 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
     } else {
         len = (len < bytes) ? len : bytes;
     }
+
     w5500_read(ptr, blk_rxbuf, (uint8_t *)buf, len);
     if (packet_info_size > 0) {
         ptr += *packet_info_len;
@@ -550,48 +470,79 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
     int blk_sreg = sno * 4 + 1;
     int blk_txbuf = sno * 4 + 2;
     usock *u = &usock_array[sno];
-    bool is_tcp = false;
+    int socket_stat;
 
     switch (u->type) {
-    case TYPE_UDP:
-    case TYPE_RAW:
-        break;
     case TYPE_TCP:
-        is_tcp = true;
+        socket_stat = W5500_Sn_SR_ESTABLISHED;
+        dest_addr = NULL;   // アドレス指定は無視する
+        addrlen = 0;
+        break;
+    case TYPE_UDP:
+        socket_stat = W5500_Sn_SR_UDP;
+        break;
+    case TYPE_RAW:
+        socket_stat = W5500_Sn_SR_IPRAW;
         break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
         return -1;  // EPROTOTYPE
     }
 
-    int free;
-    do {
-        PRINTF("  Sn_TX_FSR=");
-        free = wait_data(blk_sreg, W5500_Sn_TX_FSR,
-                         u->type == SOCK_DGRAM + 1 ? W5500_Sn_SR_UDP : W5500_Sn_SR_IPRAW);
-        if (free < 0) {
-            return -1;
-        }
-    } while (free < len);
-
-    if (!is_tcp) {
-        if (dest_addr == NULL || addrlen < sizeof(struct sockaddr_in)) {
-            PRINTF("joynetd: dest_addr is NULL or addrlen is too small\n");
-            return -1;  // EINVAL
-        }
+    if (dest_addr != NULL &&  addrlen >= sizeof(struct sockaddr_in)) {
         struct sockaddr_in *sin = (struct sockaddr_in *)dest_addr;
         w5500_write_l(W5500_Sn_DIPR, blk_sreg, ntohl(sin->sin_addr.s_addr));
         w5500_write_w(W5500_Sn_DPORT, blk_sreg, ntohs(sin->sin_port));
     }
 
-    int ptr = w5500_read_w(W5500_Sn_TX_WR, blk_sreg);
-    PRINTF("  Sn_TX_WR=0x%x\n", ptr);
-    w5500_write(ptr, blk_txbuf, (uint8_t *)buf, len);
-    ptr += len;
-    w5500_write_w(W5500_Sn_TX_WR, blk_sreg, ptr);
-    PRINTF("  Sn_TX_WR=0x%x\n", ptr);
-    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_SEND);
-    return len;
+    if (u->type == TYPE_TCP) {
+        ssize_t written = 0;
+        while (len > 0) {
+            PRINTF("  Sn_TX_FSR=");
+            int size = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat);
+            if (size < 0) {
+                return -1;
+            }
+            size = (len < size) ? len : size;
+
+            int ptr = w5500_read_w(W5500_Sn_TX_WR, blk_sreg);
+            PRINTF("  Sn_TX_WR=0x%x\n", ptr);
+            w5500_write(ptr, blk_txbuf, buf, size);
+            ptr += size;
+            buf += size;
+            len -= size;
+            written += size;
+            w5500_write_w(W5500_Sn_TX_WR, blk_sreg, ptr);
+            PRINTF("  Sn_TX_WR=0x%x\n", ptr);
+            w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_SEND);
+        }
+
+        return written;
+    } else {
+        if (len > W5500_SOCK_BUF_SIZE) {
+            PRINTF("joynetd: message too long for UDP/IPRAW socket\n");
+            return -1;  // EMSGSIZE
+        }
+
+        int free;
+        do {
+            PRINTF("  Sn_TX_FSR=");
+            free = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat);
+            if (free < 0) {
+                return -1;
+            }
+        } while (free < len);
+
+        int ptr = w5500_read_w(W5500_Sn_TX_WR, blk_sreg);
+        PRINTF("  Sn_TX_WR=0x%x\n", ptr);
+        w5500_write(ptr, blk_txbuf, buf, len);
+        ptr += len;
+        w5500_write_w(W5500_Sn_TX_WR, blk_sreg, ptr);
+        PRINTF("  Sn_TX_WR=0x%x\n", ptr);
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_SEND);
+
+        return len;
+    }
 }
 
 int do_close(int sockfd)
@@ -640,24 +591,55 @@ int do_socklen(int sockfd, int mode)
 int do_getsockname(int sockfd, char *name, int *namelen)
 {
     PRINTF("joynetd: getsockname(%d, %p, %p)\n", sockfd, name, namelen);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_getpeername(int sockfd, char *peer, int peerlen)
 {
-    PRINTF("joynetd: getpeername(%d, %p, %d)\n", sockfd, peer, peerlen);
+    PRINTF("joynetd: getpeername(%d, %p, %p)\n", sockfd, peer, peerlen);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_sockkick(int sockfd)
 {
     PRINTF("joynetd: sockkick(%d)\n", sockfd);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_shutdown(int sockfd, int how)
 {
     PRINTF("joynetd: shutdown(%d, %d)\n", sockfd, how);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
+    int blk_sreg = sno * 4 + 1;
+    usock *u = &usock_array[sno];
+
+    if (u->type == TYPE_TCP) {
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_DISCON);
+    }
+
     return 0;
 }
 
@@ -678,48 +660,96 @@ int do_usesock(int sockfd)
 int do_recvline(int sockfd, char *buf, size_t len)
 {
     PRINTF("joynetd: recvline(%d, %p, %lu)\n", sockfd, buf, len);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_sendline(int sockfd, const char *buf, size_t len)
 {
     PRINTF("joynetd: sendline(%d, %p, %lu)\n", sockfd, buf, len);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_rrecvchar(int sockfd)
 {
     PRINTF("joynetd: rrecvchar(%d)\n", sockfd);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_recvchar(int sockfd)
 {
     PRINTF("joynetd: recvchar(%d)\n", sockfd);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_usflush(int sockfd)
 {
     PRINTF("joynetd: usflush(%d)\n", sockfd);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_seteol(int sockfd, char *seq)
 {
     PRINTF("joynetd: seteol(%d, %02x:%02x)\n", sockfd, seq[0], seq[1]);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_sockmode(int sockfd, int mode)
 {
     PRINTF("joynetd: sockmode(%d, %d)\n", sockfd, mode);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
 int do_setflush(int sockfd, int chr)
 {
     PRINTF("joynetd: setflush(%d, %d)\n", sockfd, chr);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return -1;  // EBADF
+    }
+
     return 0;
 }
 
@@ -732,12 +762,24 @@ int do_psocket(long *arg)
 char *do_sockerr(int sockfd)
 {
     PRINTF("joynetd: sockerr(%d)\n", sockfd);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return NULL;    // EBADF
+    }
+
     return "";
 }
 
 char *do_sockstate(int sockfd)
 {
     PRINTF("joynetd: sockstate(%d)\n", sockfd);
+
+    int sno = validate_sockfd(sockfd);
+    if (sno < 0) {
+        return NULL;    // EBADF
+    }
+
     return "";
 }
 
@@ -840,10 +882,10 @@ int do_command(void)
         res = do_connect(arg[0], (const struct sockaddr *)arg[1], arg[2]);
         break;
     case _TI_read_s:
-        res = do_read(arg[0], (void *)arg[1], arg[2]);
+        res = do_recvfrom(arg[0], (void *)arg[1], arg[2], 0, NULL, NULL);
         break;
     case _TI_write_s:
-        res = do_write(arg[0], (const void *)arg[1], arg[2]);
+        res = do_sendto(arg[0], (const void *)arg[1], arg[2], 0, NULL, 0);
         break;
     case _TI_recvfrom:
         res = do_recvfrom(arg[0], (void *)arg[1], arg[2],
