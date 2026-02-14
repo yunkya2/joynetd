@@ -607,10 +607,21 @@ int do_getsockname(int sockfd, char *name, int *namelen)
         return -1;  // EBADF
     }
 
-    return 0;
+    usock *u = &usock_array[sno];
+    int blk_sreg = sno * 4 + 1;
+
+    if (name != NULL && namelen != NULL && *namelen >= sizeof(struct sockaddr_in)) {
+        struct sockaddr_in *sin = (struct sockaddr_in *)name;
+        sin->sin_family = AF_INET;
+        sin->sin_addr.s_addr = htonl(w5500_read_l(W5500_SIPR, 0));
+        sin->sin_port = htons(w5500_read_w(W5500_Sn_PORT, blk_sreg));
+        *namelen = sizeof(struct sockaddr_in);
+        return 0;
+    }
+    return -1;  // EINVAL
 }
 
-int do_getpeername(int sockfd, char *peer, int peerlen)
+int do_getpeername(int sockfd, char *peer, int *peerlen)
 {
     PRINTF("joynetd: getpeername(%d, %p, %p)\n", sockfd, peer, peerlen);
 
@@ -619,7 +630,18 @@ int do_getpeername(int sockfd, char *peer, int peerlen)
         return -1;  // EBADF
     }
 
-    return 0;
+    usock *u = &usock_array[sno];
+    int blk_sreg = sno * 4 + 1;
+
+    if (peer != NULL && peerlen != NULL && *peerlen >= sizeof(struct sockaddr_in)) {
+        struct sockaddr_in *sin = (struct sockaddr_in *)peer;
+        sin->sin_family = AF_INET;
+        sin->sin_addr.s_addr = htonl(w5500_read_l(W5500_Sn_DIPR, blk_sreg));
+        sin->sin_port = htons(w5500_read_w(W5500_Sn_DPORT, blk_sreg));
+        *peerlen = sizeof(struct sockaddr_in);
+        return 0;
+    }
+    return -1;  // EINVAL
 }
 
 int do_sockkick(int sockfd)
@@ -946,7 +968,7 @@ int do_command(void)
         res = do_getsockname(arg[0], (char *)arg[1], (int *)arg[2]);
         break;
     case _TI_getpeername:
-        res = do_getpeername(arg[0], (char *)arg[1], arg[2]);
+        res = do_getpeername(arg[0], (char *)arg[1], (int *)arg[2]);
         break;
     case _TI_sockkick:
         res = do_sockkick(arg[0]);
