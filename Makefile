@@ -59,6 +59,10 @@ DEPS = $(OBJS:.o=.d)
 clean:
 	-rm -f $(OBJS) $(DEPS) *.x *.elf* *.map *.d *.o
 
+release: clean all
+	./md2txtconv.py README.md
+	zip -r joynetd-$(GIT_REPO_VERSION) README.txt joynetd.x joynetd.cfg
+
 -include $(DEPS)
 
-.PHONY: all clean
+.PHONY: all clean release
