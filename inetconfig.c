@@ -61,11 +61,31 @@ static uint8_t w5500_mac[6];
 // Private functions
 //****************************************************************************
 
+static void generate_random_mac(void)
+{
+    // Generate random MAC address with locally administered bit set
+    // Use X68000 system timer as random seed
+    struct iocs_time now = _iocs_ontime();
+    unsigned long seed = now.sec + now.day;
+    
+    // Set first byte: locally administered (bit 1 = 1), unicast (bit 0 = 0)
+    w5500_mac[0] = 0x02;
+    
+    // Generate remaining 5 bytes using simple PRNG
+    for (int i = 1; i < 6; i++) {
+        seed = seed * 1103515245 + 12345;
+        w5500_mac[i] = (seed >> 16) & 0xFF;
+    }
+}
+
 void read_config(void)
 {
     FILE *fp;
     char cfgname[256];
     struct dos_psp *psp = _dos_getpdb();
+
+    // Generate default random MAC address
+    generate_random_mac();
 
     strcpy(cfgname, psp->exe_path);
     strcat(cfgname, "joynetd.cfg");
