@@ -152,7 +152,14 @@ static int wait_data(int blk_sreg, int reg, int status, int nonblock)
 #ifdef DEBUG
         PRINTF("%d ", len); fflush(stdout);
 #endif
-        if (nonblock || len > 0) {
+        if (len > 0) {
+            PRINTF("\n");
+            return len;
+        }
+        if (nonblock) {
+            if (w5500_read_b(W5500_Sn_SR, blk_sreg) != status) {
+                break;
+            }
             PRINTF("\n");
             return len;
         }
@@ -734,6 +741,16 @@ int do_socklen(int sockfd, int mode)
     }
 
     int blk_sreg = sno * 4 + 1;
+    usock *u = &usock_array[sockfd - SOCKBASE];
+
+    if (u->type == TYPE_TCP) {
+        if (w5500_read_b(W5500_Sn_SR, blk_sreg) != W5500_Sn_SR_ESTABLISHED) {
+            PRINTF("socket not in ESTABLISHED state\n");
+            errno = EINVAL;
+            return -1;
+        }
+    }
+
     switch (mode) {
     case 0:     // get receive data size
         PRINTF("--> %d\n", w5500_read_w(W5500_Sn_RX_RSR, blk_sreg));
