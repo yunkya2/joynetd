@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -156,11 +157,13 @@ static inline int validate_sockfd(int sockfd)
 {
     if (sockfd < SOCKBASE || sockfd >= SOCKBASE + W5500_N_SOCKETS) {
         PRINTF("joynetd: invalid sockfd %d\r\n", sockfd);
+        errno = EBADF;
         return -1;
     }
     sockfd -= SOCKBASE;
     if (usock_array[sockfd].type == NOTUSED) {
         PRINTF("joynetd: unused sockfd %d\r\n", sockfd + SOCKBASE);
+        errno = EBADF;
         return -1;
     }
     return sockfd;
@@ -222,7 +225,8 @@ int do_socket(int domain, int type, int protocol)
                 break;
             default:
                 PRINTF("joynetd: unsupported socket type %d\n", type);
-                return -1;  // EPROTOTYPE
+                errno = EPROTOTYPE;
+                return -1;
             }
 
             w5500_write_b(W5500_Sn_MR, blk_sreg, socket_mode);
@@ -232,7 +236,8 @@ int do_socket(int domain, int type, int protocol)
                 PRINTF("socket open timeout\n");
                 w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
                 u->type = NOTUSED;
-                return -1;  // EIO
+                errno = EIO;
+                return -1;
             }
             u->type = socket_type;
             u->refcnt = 1;
@@ -245,7 +250,8 @@ int do_socket(int domain, int type, int protocol)
             return SOCKBASE + i;
         }
     }
-    return -1;  // ENOMEM
+    errno = ENOMEM;
+    return -1;
 }
 
 int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
@@ -267,7 +273,8 @@ int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
-        return -1;  // EPROTOTYPE
+        errno = EPROTOTYPE;
+        return -1;
     }
 
     struct sockaddr_in *sin = (struct sockaddr_in *)addr;
@@ -309,7 +316,8 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
     case TYPE_RAW:
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
-        return -1;  // EPROTOTYPE
+        errno = EOPNOTSUPP;
+        return -1;
     }
 
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
@@ -328,11 +336,13 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
                 return sockfd;
             }
             PRINTF("joynetd: addr or addrlen is NULL or too small\n");
-            return -1;  // EINVAL
+            errno = EINVAL;
+            return -1;
         }
     } while (stat == W5500_Sn_SR_LISTEN);
     PRINTF("accept failed, Sn_SR=%02x\n", stat);
-    return -1;  // ECONNABORTED
+    errno = ECONNABORTED;
+    return -1;
 }
 
 int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
@@ -354,7 +364,8 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
-        return -1;  // EPROTOTYPE
+        errno = EPROTOTYPE;
+        return -1;
     }
 
     struct sockaddr_in *sin = (struct sockaddr_in *)addr;
@@ -369,7 +380,8 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     if (wait_status(blk_sreg, W5500_Sn_SR_ESTABLISHED) < 0) {
         PRINTF("connect timeout\n");
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
-        return 11;  // ECONNREFUSED
+        errno = ECONNREFUSED;
+        return -1;
     }
 
     PRINTF("S0_IR=%02x\n", w5500_read_b(W5500_Sn_IR, blk_sreg));
@@ -425,7 +437,8 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
         break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
-        return -1;  // EPROTOTYPE
+        errno = EPROTOTYPE;
+        return -1;
     }
 
     PRINTF("  Sn_RX_RSR=");
@@ -496,7 +509,8 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
         break;
     default:
         PRINTF("joynetd: unsupported socket type %d\n", u->type);
-        return -1;  // EPROTOTYPE
+        errno = EPROTOTYPE;
+        return -1;
     }
 
     if (dest_addr != NULL &&  addrlen >= sizeof(struct sockaddr_in)) {
@@ -511,6 +525,7 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
             PRINTF("  Sn_TX_FSR=");
             int size = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat);
             if (size < 0) {
+                errno = EPIPE;
                 return -1;
             }
             size = (len < size) ? len : size;
@@ -531,7 +546,8 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
     } else {
         if (len > W5500_SOCK_BUF_SIZE) {
             PRINTF("joynetd: message too long for UDP/IPRAW socket\n");
-            return -1;  // EMSGSIZE
+            errno = EMSGSIZE;
+            return -1;
         }
 
         int free;
@@ -539,6 +555,7 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
             PRINTF("  Sn_TX_FSR=");
             free = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat);
             if (free < 0) {
+                errno = EPIPE;
                 return -1;
             }
         } while (free < len);
@@ -593,6 +610,7 @@ int do_socklen(int sockfd, int mode)
     case 1:     // get send data size
         return W5500_SOCK_BUF_SIZE - w5500_read_w(W5500_Sn_TX_FSR, blk_sreg);
     default:
+        errno = EINVAL;
         return -1;
     }
 }
@@ -615,7 +633,8 @@ int do_getsockname(int sockfd, char *name, int *namelen)
         *namelen = sizeof(struct sockaddr_in);
         return 0;
     }
-    return -1;  // EINVAL
+    errno = EINVAL;
+    return -1;
 }
 
 int do_getpeername(int sockfd, char *peer, int *peerlen)
@@ -636,7 +655,8 @@ int do_getpeername(int sockfd, char *peer, int *peerlen)
         *peerlen = sizeof(struct sockaddr_in);
         return 0;
     }
-    return -1;  // EINVAL
+    errno = EINVAL;
+    return -1;
 }
 
 int do_sockkick(int sockfd)
@@ -751,7 +771,8 @@ int do_recvline(int sockfd, char *buf, size_t len)
 int do_sendline(int sockfd, const char *buf, size_t len)
 {
     PRINTF("joynetd: sendline(%d, %p, %lu)\n", sockfd, buf, len);
-    return -1;  // 未実装API
+    errno = ENOSYS;
+    return -1;
 }
 
 int do_usflush(int sockfd)
@@ -823,7 +844,8 @@ char *do_sockerr(int sockfd)
 
     int sno = validate_sockfd(sockfd);
     if (sno < 0) {
-        return NULL;    // EBADF
+        errno = EBADF;
+        return NULL;
     }
 
     return "";
@@ -835,7 +857,8 @@ char *do_sockstate(int sockfd)
 
     int sno = validate_sockfd(sockfd);
     if (sno < 0) {
-        return NULL;    // EBADF
+        errno = EBADF;
+        return NULL;
     }
 
     int blk_sreg = sno * 4 + 1;
