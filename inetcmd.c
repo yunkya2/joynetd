@@ -116,6 +116,7 @@ usock usock_array[DEFNSOCK];
 
 static in_port_t current_eph_port = EPH_PORT_BEGIN;
 static in_port_t usock_port[W5500_N_SOCKETS];
+static uint32_t usock_connecting = 0;
 static uint32_t usock_listening = 0;
 static uint32_t usock_accepted = 0;
 
@@ -488,18 +489,21 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     }
 
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CONNECT);
+    usock_connecting |= (1 << sno);
     if (u->noblock) {
-        errno = EAGAIN;
+        errno = EINPROGRESS;
         return -1;
     }
 
     if (wait_status(blk_sreg, W5500_Sn_SR_ESTABLISHED) < 0) {
         PRINTF("connect timeout\n");
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+        usock_connecting &= ~(1 << sno);
         errno = ECONNREFUSED;
         return -1;
     }
 
+    usock_connecting &= ~(1 << sno);
     PRINTF("S0_IR=%02x\n", w5500_read_b(W5500_Sn_IR, blk_sreg));
     return 0;
 }
@@ -1007,6 +1011,7 @@ char *do_sockstate(int sockfd)
         return NULL;
     }
 
+    int isconnecting = (sockfd < SOCKCLNT_BASE) && ((usock_connecting & (1 << sno)) != 0);
     int islistening = (sockfd < SOCKCLNT_BASE) && ((usock_listening & (1 << sno)) != 0);
 
     int blk_sreg = sno * 4 + 1;
@@ -1014,7 +1019,7 @@ char *do_sockstate(int sockfd)
     case W5500_Sn_SR_CLOSED:
         return "CLOSED";
     case W5500_Sn_SR_INIT:
-        return "INIT";
+        return isconnecting ? "SYN SENT" : "INIT";
     case W5500_Sn_SR_LISTEN:
         return "LISTEN";
     case W5500_Sn_SR_SYNSENT:
@@ -1022,6 +1027,9 @@ char *do_sockstate(int sockfd)
     case W5500_Sn_SR_SYNRECV:
         return islistening ? "LISTEN" : "SYN RECEIVED";
     case W5500_Sn_SR_ESTABLISHED:
+        if (isconnecting) {
+            usock_connecting &= ~(1 << sno);
+        }
         return islistening ? "LISTEN" : "ESTABLISHED";
     case W5500_Sn_SR_FIN_WAIT:
         return islistening ? "LISTEN" : "FIN_WAIT";
