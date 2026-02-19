@@ -87,6 +87,10 @@ typedef struct usock
 
 #define W5500_SOCK_BUF_SIZE   2048
 
+#define SOCKFD_NORMAL       0   // fd for send()/recv()
+#define SOCKFD_LISTEN       1   // fd for listen()
+#define SOCKFD_ACCEPT       2   // fd for accept()
+
 //****************************************************************************
 // Global variables
 //****************************************************************************
@@ -111,6 +115,8 @@ usock usock_array[DEFNSOCK];
 
 static in_port_t current_eph_port = EPH_PORT_BEGIN;
 static in_port_t usock_port[W5500_N_SOCKETS];
+static uint32_t usock_listening = 0;
+static uint32_t usock_accepted = 0;
 
 //****************************************************************************
 // Private functions
@@ -155,20 +161,66 @@ static int wait_data(int blk_sreg, int reg, int status, int nonblock)
     return -1;
 }
 
-static inline int validate_sockfd(int sockfd)
+static int validate_sockfd(int sockfd, int type)
 {
-    if (sockfd < SOCKBASE || sockfd >= SOCKBASE + W5500_N_SOCKETS) {
-        PRINTF("joynetd: invalid sockfd %d\r\n", sockfd);
-        errno = EBADF;
-        return -1;
+    switch (type) {
+    case SOCKFD_NORMAL:
+        if (sockfd >= SOCKCLNT_BASE && sockfd < SOCKCLNT_BASE + W5500_N_SOCKETS) {
+            sockfd -= SOCKCLNT_BASE;
+            if (usock_array[sockfd].type == NOTUSED) {
+                PRINTF("joynetd: unused sockfd %d\r\n", sockfd + SOCKCLNT_BASE);
+                errno = EBADF;
+                return -1;
+            }
+            if (!(usock_accepted & (1 << sockfd))) {
+                PRINTF("joynetd: socket %d is not ready for recv/send\r\n", sockfd + SOCKCLNT_BASE);
+                errno = EADDRINUSE;
+                return -1;
+            }
+            return sockfd;
+        }
+        /* fall through */
+
+    case SOCKFD_LISTEN:
+        if (sockfd >= SOCKBASE && sockfd < SOCKBASE + W5500_N_SOCKETS) {
+            sockfd -= SOCKBASE;
+            if (usock_array[sockfd].type == NOTUSED) {
+                PRINTF("joynetd: unused sockfd %d\r\n", sockfd + SOCKBASE);
+                errno = EBADF;
+                return -1;
+            }
+            if (usock_listening & (1 << sockfd)) {
+                PRINTF("joynetd: socket %d is already listening\r\n", sockfd + SOCKBASE);
+                errno = EADDRINUSE;
+                return -1;
+            }
+            return sockfd;
+        }
+        break;
+
+    case SOCKFD_ACCEPT:
+        if (sockfd >= SOCKBASE && sockfd < SOCKBASE + W5500_N_SOCKETS) {
+            sockfd -= SOCKBASE;
+            if (usock_array[sockfd].type == NOTUSED) {
+                PRINTF("joynetd: unused sockfd %d\r\n", sockfd + SOCKBASE);
+                errno = EBADF;
+                return -1;
+            }
+            if (!(usock_listening & (1 << sockfd)) || (usock_accepted & (1 << sockfd))) {
+                PRINTF("joynetd: socket %d is not ready for accept\r\n", sockfd + SOCKBASE);
+                errno = EADDRINUSE;
+                return -1;
+            }
+            return sockfd;
+        }
+
+        break;
+    default:
+        break;
     }
-    sockfd -= SOCKBASE;
-    if (usock_array[sockfd].type == NOTUSED) {
-        PRINTF("joynetd: unused sockfd %d\r\n", sockfd + SOCKBASE);
-        errno = EBADF;
-        return -1;
-    }
-    return sockfd;
+    PRINTF("joynetd: invalid sockfd %d\r\n", sockfd);
+    errno = EBADF;
+    return -1;
 }
 
 //****************************************************************************
@@ -260,9 +312,9 @@ int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     PRINTF("joynetd: bind(%d, %p, %lu)\n", sockfd, addr, addrlen);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -289,9 +341,9 @@ int do_listen(int sockfd, int backlog)
 {
     PRINTF("joynetd: listen(%d, %d)\n", sockfd, backlog);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_LISTEN);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -308,7 +360,13 @@ int do_listen(int sockfd, int backlog)
         return -1;
     }
 
+    if (w5500_read_b(W5500_Sn_SR, blk_sreg) != W5500_Sn_SR_INIT) {
+        PRINTF("socket not in INIT state\n");
+        errno = EINVAL;
+        return -1;
+    }
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
+    usock_listening |= (1 << sno);
 
     return 0;
 }
@@ -317,9 +375,9 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
     PRINTF("joynetd: accept(%d, %p, %p)\n", sockfd, addr, addrlen);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_ACCEPT);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -346,13 +404,22 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
                 sin->sin_addr.s_addr = htonl(w5500_read_l(W5500_Sn_DIPR, blk_sreg));
                 sin->sin_port = htons(w5500_read_w(W5500_Sn_DPORT, blk_sreg));
                 *addrlen = sizeof(struct sockaddr_in);
-                u->refcnt++;
-                return sockfd;
+
+                usock *uc = &usock_array[sno + SOCKCLNT_BASE - SOCKBASE];
+                uc->type = u->type;
+                uc->refcnt = 1;
+                uc->noblock = 0;
+                uc->rdysock = 1;
+                uc->flush = u->flush;
+                strcpy(uc->eol, u->eol);
+                usock_accepted |= (1 << sno);
+
+                return SOCKCLNT_BASE + sno;
             }
             PRINTF("joynetd: addr or addrlen is NULL or too small\n");
             errno = EINVAL;
             return -1;
-        } else if (u->nonblock && stat == W5500_Sn_SR_LISTEN) {
+        } else if (u->noblock && stat == W5500_Sn_SR_LISTEN) {
             errno = EAGAIN;
             return -1;
         }
@@ -366,9 +433,9 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
     PRINTF("joynetd: connect(%d, %p, %lu)\n", sockfd, addr, addrlen);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -415,9 +482,9 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
 {
     PRINTF("joynetd: recvfrom(%d, %p, %lu, %d, %p, %p)\n", sockfd, buf, len, flags, src_addr, addrlen);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -510,9 +577,9 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
 {
     PRINTF("joynetd: sendto(%d, %p, %lu, %d, %p, %lu)\n", sockfd, buf, len, flags, dest_addr, addrlen);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -613,9 +680,9 @@ int do_close(int sockfd)
 {
     PRINTF("joynetd: close(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -625,7 +692,14 @@ int do_close(int sockfd)
         return 0;
     }
 
-    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+    if (sockfd >= SOCKCLNT_BASE) {
+        usock_accepted &= ~(1 << sno);
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
+    } else {
+        usock_listening &= ~(1 << sno);
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+    }
     u->type = NOTUSED;
     return 0;
 }
@@ -634,9 +708,9 @@ int do_socklen(int sockfd, int mode)
 {
     PRINTF("joynetd: socklen(%d, %d)\n", sockfd, mode);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -656,9 +730,9 @@ int do_getsockname(int sockfd, char *name, int *namelen)
 {
     PRINTF("joynetd: getsockname(%d, %p, %p)\n", sockfd, name, namelen);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -678,9 +752,9 @@ int do_getpeername(int sockfd, char *peer, int *peerlen)
 {
     PRINTF("joynetd: getpeername(%d, %p, %p)\n", sockfd, peer, peerlen);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -700,9 +774,9 @@ int do_sockkick(int sockfd)
 {
     PRINTF("joynetd: sockkick(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     return 0;
@@ -712,9 +786,9 @@ int do_shutdown(int sockfd, int how)
 {
     PRINTF("joynetd: shutdown(%d, %d)\n", sockfd, how);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     int blk_sreg = sno * 4 + 1;
@@ -731,9 +805,9 @@ int do_usesock(int sockfd)
 {
     PRINTF("joynetd: usesock(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     usock *u = &usock_array[sno];
@@ -756,9 +830,9 @@ int do_recvchar(int sockfd)
 {
     PRINTF("joynetd: recvchar(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     usock *u = &usock_array[sno];
@@ -816,9 +890,9 @@ int do_usflush(int sockfd)
 {
     PRINTF("joynetd: usflush(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     return 0;
@@ -828,9 +902,9 @@ int do_seteol(int sockfd, char *seq)
 {
     PRINTF("joynetd: seteol(%d, %02x:%02x)\n", sockfd, seq[0], seq[1]);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     usock *u = &usock_array[sno];
@@ -844,9 +918,9 @@ int do_sockmode(int sockfd, int mode)
 {
     PRINTF("joynetd: sockmode(%d, %d)\n", sockfd, mode);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     usock *u = &usock_array[sno];
@@ -861,9 +935,9 @@ int do_setflush(int sockfd, int chr)
 {
     PRINTF("joynetd: setflush(%d, %d)\n", sockfd, chr);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        return -1;  // EBADF
+        return -1;
     }
 
     return 0;
@@ -879,9 +953,8 @@ char *do_sockerr(int sockfd)
 {
     PRINTF("joynetd: sockerr(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        errno = EBADF;
         return NULL;
     }
 
@@ -892,9 +965,8 @@ char *do_sockstate(int sockfd)
 {
     PRINTF("joynetd: sockstate(%d)\n", sockfd);
 
-    int sno = validate_sockfd(sockfd);
+    int sno = validate_sockfd(sockfd, SOCKFD_NORMAL);
     if (sno < 0) {
-        errno = EBADF;
         return NULL;
     }
 
