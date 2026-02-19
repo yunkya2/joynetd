@@ -80,6 +80,8 @@ typedef struct usock
 
 //----------------------------------------------------------------------------
 
+#define SOCKCLNT_BASE   (SOCKBASE + W5500_N_SOCKETS)
+
 #define EPH_PORT_BEGIN   0xc000
 #define EPH_PORT_END     0xd000
 
@@ -134,7 +136,7 @@ static int wait_status(int blk_sreg, uint8_t status)
     return -1;
 }
 
-static int wait_data(int blk_sreg, int reg, int status)
+static int wait_data(int blk_sreg, int reg, int status, int nonblock)
 {
     int len;
 
@@ -143,7 +145,7 @@ static int wait_data(int blk_sreg, int reg, int status)
 #ifdef DEBUG
         PRINTF("%d ", len); fflush(stdout);
 #endif
-        if (len > 0) {
+        if (nonblock || len > 0) {
             PRINTF("\n");
             return len;
         }
@@ -292,7 +294,21 @@ int do_listen(int sockfd, int backlog)
         return -1;  // EBADF
     }
 
-    // Do nothing for backlog
+    int blk_sreg = sno * 4 + 1;
+    usock *u = &usock_array[sno];
+
+    switch (u->type) {
+    case TYPE_TCP:
+        break;
+    case TYPE_UDP:
+    case TYPE_RAW:
+    default:
+        PRINTF("joynetd: unsupported socket type %d\n", u->type);
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+
+    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
 
     return 0;
 }
@@ -320,8 +336,6 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
         return -1;
     }
 
-    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
-
     int stat;
     do {
         stat = w5500_read_b(W5500_Sn_SR, blk_sreg);
@@ -337,6 +351,9 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
             }
             PRINTF("joynetd: addr or addrlen is NULL or too small\n");
             errno = EINVAL;
+            return -1;
+        } else if (u->nonblock && stat == W5500_Sn_SR_LISTEN) {
+            errno = EAGAIN;
             return -1;
         }
     } while (stat == W5500_Sn_SR_LISTEN);
@@ -377,6 +394,11 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     }
 
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CONNECT);
+    if (u->noblock) {
+        errno = EAGAIN;
+        return -1;
+    }
+
     if (wait_status(blk_sreg, W5500_Sn_SR_ESTABLISHED) < 0) {
         PRINTF("connect timeout\n");
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
@@ -442,8 +464,11 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
     }
 
     PRINTF("  Sn_RX_RSR=");
-    int bytes = wait_data(blk_sreg, W5500_Sn_RX_RSR, socket_stat);
-    if (bytes < 0) {
+    int bytes = wait_data(blk_sreg, W5500_Sn_RX_RSR, socket_stat, u->noblock);
+    if (bytes == 0) {
+        errno = EAGAIN;
+        return -1;
+    } else if (bytes < 0) {
         return 0;
     }
 
@@ -523,8 +548,15 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
         ssize_t written = 0;
         while (len > 0) {
             PRINTF("  Sn_TX_FSR=");
-            int size = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat);
-            if (size < 0) {
+            int size = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat, u->noblock);
+            if (size == 0) {            // ノンブロッキングでこれ以上データが書き込めない場合
+                if (written == 0) {     // 1バイトも書いていなければエラー
+                    errno = EAGAIN;
+                    return -1;
+                } else {                // 書き込めた分だけ返す
+                    break;
+                }
+            } else if (size < 0) {
                 errno = EPIPE;
                 return -1;
             }
@@ -551,14 +583,19 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
         }
 
         int free;
-        do {
+        while (1) {
             PRINTF("  Sn_TX_FSR=");
-            free = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat);
+            free = wait_data(blk_sreg, W5500_Sn_TX_FSR, socket_stat, u->noblock);
             if (free < 0) {
                 errno = EPIPE;
                 return -1;
+            } else if (free >= len) {
+                break;
+            } else if (u->noblock) {    // ノンブロッキングで一度でデータを書き込めない場合はエラー
+                errno = EAGAIN;
+                return -1;
             }
-        } while (free < len);
+        }
 
         int ptr = w5500_read_w(W5500_Sn_TX_WR, blk_sreg);
         PRINTF("  Sn_TX_WR=0x%x\n", ptr);
