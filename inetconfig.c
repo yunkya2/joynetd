@@ -95,7 +95,6 @@ void read_config(void)
 
     // Generate default random MAC address
     generate_random_mac();
-    config_flags |= FLAG_MAC;
 
     strcpy(cfgname, psp->exe_path);
     strcat(cfgname, "joynetd.cfg");
@@ -110,6 +109,7 @@ void read_config(void)
                     w5500_mac[i] = strtoul(p, &q, 16);
                     p = q + 1;
                 }
+                config_flags |= FLAG_MAC;
             } else if (strncasecmp(line, "ip=", 3) == 0) {
                 p = &line[3];
                 for (int i = 0; i < 4; i++) {
@@ -146,26 +146,29 @@ void read_config(void)
         fclose(fp);
     }
 
-    printf("MAC: ");
+    if (!(config_flags & FLAG_MAC)) {
+        printf("※ joynetd.cfg にMACアドレスの指定がないため、ランダムMACアドレスを使用します\n");
+    }
+    printf("MAC addr: ");
     for (int i = 0; i < 6; i++) {
         printf("%02x%s", w5500_mac[i], i < 5 ? ":" : "");
     }
     printf("\n");
     if (config_flags & FLAG_IP) {
-        printf("IP: %s\n", inet_ntoa(*(struct in_addr *)&w5500_sipr.a));
+        printf("IP addr : %s\n", inet_ntoa(*(struct in_addr *)&w5500_sipr.a));
     }
     if (config_flags & FLAG_MASK) {
-        printf("Netmask: %s\n", inet_ntoa(*(struct in_addr *)&w5500_subr.a));
+        printf("Netmask : %s\n", inet_ntoa(*(struct in_addr *)&w5500_subr.a));
     }
     if (config_flags & FLAG_GW) {
-        printf("Gateway: %s\n", inet_ntoa(*(struct in_addr *)&w5500_gar.a));
+        printf("Gateway : %s\n", inet_ntoa(*(struct in_addr *)&w5500_gar.a));
     }
     if (config_flags & FLAG_DNS) {
-        printf("DNS: %s\n", inet_ntoa(*(struct in_addr *)&w5500_dns.a));
+        printf("DNS     : %s\n", inet_ntoa(*(struct in_addr *)&w5500_dns.a));
     }
     if (config_flags & FLAG_DOMAIN) {
         char *domain = do_get_domain_name();
-        printf("Domain: %s\n", domain[0] ? domain : "(none)");
+        printf("Domain  : %s\n", domain[0] ? domain : "(none)");
     }
 
 #ifdef DEBUG
