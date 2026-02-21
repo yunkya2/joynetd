@@ -33,10 +33,18 @@
 #define PRINTF(...)
 #endif
 
+#include <stdbool.h>
 #include <sys/socket.h>
 #include <netdb.h>
 
 #include "w5500.h"
+
+#define IFNAME "en0"
+
+// joynetd.c
+extern bool ifenable;
+extern int trap_number;
+int set_ifenable(bool enable);
 
 // inetcmd.c
 int do_socket(int domain, int type, int protocol);
@@ -53,6 +61,12 @@ int do_socklen(int sockfd, int mode);
 int do_seteol(int sockfd, char *seq);
 int do_sockmode(int sockfd, int mode);
 int do_setflush(int sockfd, int chr);
+
+// inetiface.c
+struct iface;
+struct iface *do_get_iface_list(void);
+struct iface *do_get_new_iface(const char *name);
+int do_link_new_iface(const struct iface *n_i);
 
 // inetdns.c
 struct rrec;

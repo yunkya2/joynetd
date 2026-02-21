@@ -96,8 +96,6 @@ typedef struct usock
 // Global variables
 //****************************************************************************
 
-extern int trap_number;
-
 #define ARPSIZE 17
 void *dummy_arp_table[ARPSIZE];
 
@@ -1093,9 +1091,13 @@ int do_command(void)
         break;
 
     case _TI_get_iface_list:
+        res = (int)do_get_iface_list();
+        break;
     case _TI_get_new_iface:
+        res = (int)do_get_new_iface((const char *)arg);
+        break;
     case _TI_link_new_iface:
-        res = 0;
+        res = do_link_new_iface((const struct iface *)arg);
         break;
 
     case _TI_rt_top:
@@ -1109,6 +1111,8 @@ int do_command(void)
     case _TI_dns_add:
     case _TI_dns_drop:
     case _TI_dns_get:
+        res = 0;
+        break;
     case _TI_set_domain_name:
         res = do_set_domain_name((char *)arg);
         break;

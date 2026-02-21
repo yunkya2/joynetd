@@ -73,6 +73,7 @@ struct joynetd_data joynetd_data = {
     .vectno = 0,
 };
 
+bool ifenable = false;
 int trap_number = -1;
 
 static bool opt_r = false;  // -r option
@@ -119,6 +120,12 @@ static void *find_tcpip(void)
         }
     }
     return NULL;
+}
+
+int set_ifenable(bool enable)
+{
+    ifenable = enable;
+    return 0;
 }
 
 //****************************************************************************
@@ -185,6 +192,11 @@ int main(int argc, char **argv)
             _dos_print("常駐している joynetd のバージョンが異なります\r\n");
             return 1;
         }
+
+        w5500_ini();
+        w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
+        w5500_fin();
+
         if (data->vectno != 0) {
             _dos_intvcs(data->vectno, data->oldvect);
         }
@@ -219,6 +231,7 @@ int main(int argc, char **argv)
 
     init_etc_files();
     read_config();
+    set_ifenable(ifenable);
 
     w5500_fin();
 

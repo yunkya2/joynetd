@@ -42,6 +42,13 @@
 // Macros and definitions
 //****************************************************************************
 
+#define FLAG_MAC        (1 << 0)
+#define FLAG_IP         (1 << 1)
+#define FLAG_MASK       (1 << 2)
+#define FLAG_GW         (1 << 3)
+#define FLAG_DNS        (1 << 4)
+#define FLAG_DOMAIN     (1 << 5)
+
 union inaddr {
     in_addr_t a;
     uint8_t b[4];
@@ -56,6 +63,8 @@ union inaddr w5500_subr;
 union inaddr w5500_sipr;
 union inaddr w5500_dns;
 static uint8_t w5500_mac[6];
+
+static int config_flags = 0;
 
 //****************************************************************************
 // Private functions
@@ -86,6 +95,7 @@ void read_config(void)
 
     // Generate default random MAC address
     generate_random_mac();
+    config_flags |= FLAG_MAC;
 
     strcpy(cfgname, psp->exe_path);
     strcat(cfgname, "joynetd.cfg");
@@ -106,26 +116,31 @@ void read_config(void)
                     w5500_sipr.b[i] = strtoul(p, &q, 0);
                     p = q + 1;
                 }
+                config_flags |= FLAG_IP;
             } else if (strncasecmp(line, "mask=", 5) == 0) {
                 p = &line[5];
                 for (int i = 0; i < 4; i++) {
                     w5500_subr.b[i] = strtoul(p, &q, 0);
                     p = q + 1;
                 }
+                config_flags |= FLAG_MASK;
             } else if (strncasecmp(line, "gw=", 3) == 0) {
                 p = &line[3];
                 for (int i = 0; i < 4; i++) {
                     w5500_gar.b[i] = strtoul(p, &q, 0);
                     p = q + 1;
                 }
+                config_flags |= FLAG_GW;
             } else if (strncasecmp(line, "dns=", 4) == 0) {
                 p = &line[4];
                 for (int i = 0; i < 4; i++) {
                     w5500_dns.b[i] = strtoul(p, &q, 0);
                     p = q + 1;
                 }
+                config_flags |= FLAG_DNS;
             } else if (strncasecmp(line, "domain=", 7) == 0) {
                 do_set_domain_name(&line[7]);
+                config_flags |= FLAG_DOMAIN;
             }
         }
         fclose(fp);
@@ -135,23 +150,23 @@ void read_config(void)
     for (int i = 0; i < 6; i++) {
         printf("%02x%s", w5500_mac[i], i < 5 ? ":" : "");
     }
-    printf("\nIP: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%d%s", w5500_sipr.b[i], i < 3 ? "." : "");
-    }
-    printf("\nnetmask: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%d%s", w5500_subr.b[i], i < 3 ? "." : "");
-    }
-    printf("\ngateway: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%d%s", w5500_gar.b[i], i < 3 ? "." : "");
-    }
-    printf("\nDNS: ");
-    for (int i = 0; i < 4; i++) {
-        printf("%d%s", w5500_dns.b[i], i < 3 ? "." : "");
-    }
     printf("\n");
+    if (config_flags & FLAG_IP) {
+        printf("IP: %s\n", inet_ntoa(*(struct in_addr *)&w5500_sipr.a));
+    }
+    if (config_flags & FLAG_MASK) {
+        printf("Netmask: %s\n", inet_ntoa(*(struct in_addr *)&w5500_subr.a));
+    }
+    if (config_flags & FLAG_GW) {
+        printf("Gateway: %s\n", inet_ntoa(*(struct in_addr *)&w5500_gar.a));
+    }
+    if (config_flags & FLAG_DNS) {
+        printf("DNS: %s\n", inet_ntoa(*(struct in_addr *)&w5500_dns.a));
+    }
+    if (config_flags & FLAG_DOMAIN) {
+        char *domain = do_get_domain_name();
+        printf("Domain: %s\n", domain[0] ? domain : "(none)");
+    }
 
 #ifdef DEBUG
     for (int i = 0; i < 0x40; i += 0x10) {
@@ -168,7 +183,15 @@ void read_config(void)
     // Configure W5500 network settings
 
     w5500_write(W5500_SHAR, 0, w5500_mac, 6);
-    w5500_write_l(W5500_GAR, 0, w5500_gar.a);
-    w5500_write_l(W5500_SUBR, 0, w5500_subr.a);
-    w5500_write_l(W5500_SIPR, 0, w5500_sipr.a);
+    if (config_flags & FLAG_IP) {
+        w5500_write_l(W5500_SIPR, 0, w5500_sipr.a);
+    }
+    if (config_flags & FLAG_MASK) {
+        w5500_write_l(W5500_SUBR, 0, w5500_subr.a);
+    }
+    if (config_flags & FLAG_GW) {
+        w5500_write_l(W5500_GAR, 0, w5500_gar.a);
+    }
+
+    ifenable = (config_flags & (FLAG_IP|FLAG_MASK|FLAG_GW|FLAG_DNS)) == (FLAG_IP|FLAG_MASK|FLAG_GW|FLAG_DNS);
 }

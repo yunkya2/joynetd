@@ -40,7 +40,7 @@ INC +=
 DEFS +=
 
 TARGET = joynetd.x
-OBJS += head.o joynetd.o inetconfig.o inetcmd.o inetdns.o inetetc.o w5500.o
+OBJS += head.o joynetd.o inetconfig.o inetcmd.o inetiface.o inetdns.o inetetc.o w5500.o
 LIBS += -lsocket
 
 all: $(TARGET)
