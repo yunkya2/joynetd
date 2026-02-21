@@ -10,6 +10,7 @@
 
 ![イーサネットじょい君](images/etherjoy1s.jpg)
 
+
 ## セットアップ手順
 
 ### 「イーサーネットじょい君」の接続
@@ -47,27 +48,120 @@ CONFIG.SYS に以下の行を追加して再起動し、バックグラウンド
 process = 3 10 10
 ```
 
-### ネットワーク設定
+### joynetd.x の実行
 
-joynetd.x は inetd.x とは異なり、設定ファイル `joynetd.cfg` を使用してネットワーク設定を行います
-(ifconfig や inetdconf などのコマンドは joynetd.x では使用できません)。
+ネットワークを有効にするために joynetd.x を実行します。
+「イーサネットじょい君」をジョイスティックポート 1 に接続した場合は
+```
+joynetd   (または joynetd -j1)
+```
+ジョイスティックポート 2 に接続した場合は
+```
+joynetd -j2
+```
+を実行してください。
 
-設定ファイルを joynetd.x と同じディレクトリに配置して、使用する環境に応じて内容を編集してください。
+「イーサネットじょい君」を認識すると、
+```
+X680x0 Ethernet Joy-kun Network driver (version xxxxxxxx)
+※ joynetd.cfg にMACアドレスの指定がないため、ランダムMACアドレスを使用します
+MAC addr: xx;xx:xx:xx:xx:xx
+joynetd が常駐しました
+```
+のように表示されてドライバが常駐します
+(警告メッセージが表示されていますが、これについては後述します)。
+
+もしここで、
+```
+イーサネットじょい君が接続されていません
+```
+と表示された場合は、ジョイスティックポートにイーサネットじょい君が正しく接続されているか、電源供給が正常に行われているかを確認してください。
+
+### ネットワークの設定
+
+joynetd.x 常駐後のネットワーク設定については inetd.x と同じです。
+
+#### IP アドレス、ネットマスク指定
+
+TCPPACKA 付属の ifconfig コマンドを使用して、IPアドレスやネットマスクを指定します。
+ネットワークインターフェースには `en0` を使用します。
+
+例えば IP アドレスを 192.168.1.8、ネットマスクを 255.255.255.0 に設定する場合は、以下のコマンドを実行します。
 
 ```
-mac=02:03:04:05:06:07
-ip=192.168.1.100
-mask=255.255.255.0
-gw=192.168.1.1
-dns=192.168.1.1
+ifconfig en0 192.168.1.8 netmask 255.255.255.0 up
 ```
+
+#### DNS サーバ、デフォルトゲートウェイの指定
+
+DNS サーバやデフォルトゲートウェイの指定は、TCPPACKA 付属の inetdconf コマンドを使用して行います。
+例えば DNS サーバ、デフォルトゲートウェイともに 192.168.1.1 に設定する場合は、以下のコマンドを実行します。
+
+```
+inetdconf +dns 192.168.1.1
+inetdconf +router 192.168.1.1
+```
+
+コマンドラインオプションを付けずに inetdconf コマンドを実行すると、現在のネットワーク設定を確認できます。
+
+```
+A>inetdconf
+default router:         192.168.1.1
+rip           :         On
+domain name servers:    192.168.1.1
+domain name:            None
+```
+
+これらのネットワーク設定は、設定ファイル joynetd.cfg で行うこともできます。これについては後述します。
+
+### 接続確認
+
+ここまでの設定が完了すれば、TCP/IPアプリケーションがネットワークを利用できるようになります。
+以下のコマンドを実行してみます。
+
+```
+ping www.google.com
+```
+
+イーサネットじょい君がルーターを介してインターネットに接続されていて正しくネットワーク設定が出来ていれば、ping に対して以下のように応答があるはずです
+(CTRL+C で 中止できます)。
+
+```
+PING www.google.com (xxx.xxx.xxx.xxx): 56 data bytes
+64 bytes from xxx.xxx.xxx.xxx: icmp_seq=0 time=xx ms
+64 bytes from xxx.xxx.xxx.xxx: icmp_seq=1 time=xx ms
+64 bytes from xxx.xxx.xxx.xxx: icmp_seq=2 time=xx ms
+    :
+```
+
+もし応答がない場合は、LANケーブルの接続や joynetd.cfg の設定内容を確認してみてください。
+
+
+## joynetd.cfg による設定
+
+ここまでの説明では TCPPACKA 付属のコマンドを使用してネットワーク設定を行いましたが、joynetd.x は設定ファイル `joynetd.cfg` を使用してネットワーク設定を行うこともできます
+
+デフォルトではすべての設定がコメントアウトされているため、適宜コメントを外して使用してください。
+
+### MAC アドレスの設定について
+
+MACアドレス通常、ネットワーク機器の製造時に一意に割り当てられますが、イーサネットじょい君で使用しているネットワークコントローラ [W5500](https://wiznet.io/products/ethernet-chips/w5500) はMACアドレスを内蔵していないため、ユーザが同一ネットワーク上の他の機器と重複しないような任意のアドレスを設定する必要があります。
+
+デフォルトの joynetd.cfg にはこの設定がないため、起動時に
+```
+※ joynetd.cfg にMACアドレスの指定がないため、ランダムMACアドレスを使用します
+```
+と表示して、ランダムに生成したアドレスを使用します。
+
+この状態でもネットワークは利用できますが、joynetd.x 起動のたびに異なるアドレスが使用されると他の機器との接続に支障が出る可能性があるため、MACアドレスは必ず設定して固定の値で運用することを推奨します。
+
+### 設定項目
+
+joynetd.cfg で設定できる項目は以下の通りです。詳細は joynetd.cfg 内のコメントを参照してください。
 
 #### `mac`: MACアドレス
 
 MACアドレスはネットワーク上の機器を識別するための48ビット(6バイト)の値で、16進数を8ビットごとにコロンで区切って表記します。
-
-通常、このアドレスはネットワーク機器の製造時に一意に割り当てられますが、イーサネットじょい君で使用しているネットワークコントローラ [W5500](https://wiznet.io/products/ethernet-chips/w5500) はMACアドレスを内蔵していないため、ユーザが任意のMACアドレスを設定する必要があります。
-同一ネットワーク上の他の機器と重複しないような値を設定してください。
 
 #### `ip`: IPアドレス
 
@@ -87,66 +181,17 @@ MACアドレスはネットワーク上の機器を識別するための48ビッ
 「イーサネットじょい君」を接続するネットワークのDNSサーバのIPアドレスを指定します
 (通常はルーターのIPアドレスになります)。
 
-### joynetd.x の実行
-
-ネットワークを有効にするために joynetd.x を実行します。
-joynetd.x は以下のコマンドラインオプションを指定できます。
-
-```
-使用法: joynetd [-r] [-p|-j<port number>] [-t<trap number>]
-  -r       常駐解除
-  -p|-j    使用するジョイスティックポート番号 (1 or 2) (default: 1)
-  -t       APIのtrap番号 (0～7)
-```
-
-起動してイーサネットじょい君を認識すると、
-```
-X680x0 Ethernet Joy-kun Network driver (version xxxxxxxx)
-MAC: xx;xx:xx:xx:xx:xx
-IP: xxx.xxx.xxx.xxx
-netmask: xxx.xxx.xxx.xxx
-gateway: xxx.xxx.xxx.xxx
-DNS: xxx.xxx.xxx.xxx
-joynetd が常駐しました
-```
-のように表示されてドライバが常駐し、TCP/IPアプリケーションが利用可能になります。
-
-```
-イーサネットじょい君が接続されていません
-```
-と表示された場合は、ジョイスティックポートにイーサネットじょい君が正しく接続されているか、電源供給が正常に行われているかを確認してください。
-
-### 接続確認
-
-joynetd が常駐できたら、ネットワークの接続を確認してみましょう。
-以下のコマンドを実行します。
-
-```
-ping www.google.com
-```
-
-イーサネットじょい君がルーターを介してインターネットに接続されていて、joynetd.cfg で正しくネットワーク設定が出来ていれば、ping に対して以下のように応答があるはずです
-(CTRL+C で 中止できます)。
-
-```
-PING www.google.com (xxx.xxx.xxx.xxx): 56 data bytes
-64 bytes from xxx.xxx.xxx.xxx: icmp_seq=0 time=xx ms
-64 bytes from xxx.xxx.xxx.xxx: icmp_seq=1 time=xx ms
-64 bytes from xxx.xxx.xxx.xxx: icmp_seq=2 time=xx ms
-    :
-```
-
-もし応答がない場合は、LANケーブルの接続や joynetd.cfg の設定内容を確認してみてください。
 
 ## 動作確認済みアプリケーション
 
 以下のネットワークアプリケーションの動作を確認しています
 
 - TCPPACKA 付属のコマンド
-  - ping, telnet
+  - ifconfig, inetdconf, netstat, ping, telnet
 - [smbfs, smbclient](https://github.com/yunkya2/smbfs-x68k)
 - [httpsget](https://github.com/yunkya2/httpsget)
 - [WebXpressionPlus](https://github.com/yunkya2/WebXpressionPlus)
+- [idhcpc](https://github.com/68fpjc/idhcpc)
 
 使用方法は各コマンドのドキュメントを参照してください。
 
@@ -155,17 +200,14 @@ PING www.google.com (xxx.xxx.xxx.xxx): 56 data bytes
 
 現バージョンでは、inetd.x の以下の機能には対応していません。
 
-- ネットワーク設定関連の以下のコマンド (ネットワーク設定には joynetd.cfg を使用します)
-  - arp, ifconfig, inetdconf, netstat
+- ネットワーク設定関連の以下のコマンド
+  - arp コマンド
+  - netstat コマンドによる統計情報表示
 - TCPPACKA 付属のライブラリの以下の機能
   - libether.a の機能すべて
-  - libnetwokr.a の以下のAPI
-    - ARP関連すべて (search_arp_table(), delete_arp_table()など)
-    - iface関連すべて (get_iface_list(), iface_lookup()など)
-    - route関連すべて (rt_top(), rt_lookup()など)
-    - 以下のdomain関連API
-      - dns_add(),dns_drop(),dns_get()
+  - libnetwokr.a のARP関連API (search_arp_table(), delete_arp_table()など)
 - ループバックインターフェース (lo0: 127.0.0.1)
+
 
 ## ジョイスティックポートの利用について
 
@@ -173,11 +215,13 @@ joynetd.x が常駐している間はジョイスティックポートの状態�
 
 接続していない方のジョイスティックポートは、ネットワークアクセス中でなければ通常通り使用できます。
 
+
 ## 免責事項
 
 「イーサネットじょい君」およびドライバ joynetd.x は無保証です。
 
 利用者が「イーサネットじょい君」およびドライバ joynetd.x を使用した結果、いかなるトラブルが発生した場合であっても、作者は一切の責任を負わないものとします。個人の責任において使用してください。
+
 
 ## ライセンス
 
