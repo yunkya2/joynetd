@@ -721,6 +721,10 @@ int do_close(int sockfd)
         return 0;
     }
 
+    if (u->type == TYPE_UDP) {
+        do_rt_lookup(0);    // workaround for idhcpc.x
+    }
+
     if (sockfd >= SOCKCLNT_BASE) {
         usock_accepted &= ~(1 << sno);
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);

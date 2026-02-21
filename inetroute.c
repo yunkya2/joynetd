@@ -68,7 +68,6 @@ typedef route *rtable[32][NROUTE];
 
 static rtable joyrtable;
 static struct route defroute;
-static in_addr_t def_gateway;
 static int rip_mode;
 
 //****************************************************************************
@@ -84,15 +83,11 @@ struct route **do_rt_top(struct route **def)
     PRINTF("joynetd: rt_top(%p)\n", def);
 
     if (def) {
-        if (def_gateway) {
-            defroute.gateway = ntohl(def_gateway);
-            defroute.iface = do_get_iface_list();
-            *def = &defroute;
-        } else {
-            *def = NULL;
-        }
+        defroute.iface = do_get_iface_list();
+        *def = &defroute;
     }
 
+    w5500_write_l(W5500_GAR, 0, ntohl(defroute.gateway));
     return (struct route **)&joyrtable;
 }
 
@@ -100,6 +95,7 @@ struct route *do_rt_lookup(long ip)
 {
     PRINTF("joynetd: rt_top(%08lx)\n", ip);
 
+    w5500_write_l(W5500_GAR, 0, ntohl(defroute.gateway));
     return &defroute;
 }
 
@@ -107,6 +103,7 @@ struct route *do_rt_lookupb(long ip, unsigned int bits)
 {
     PRINTF("joynetd: rt_top(%08lx/%u)\n", ip, bits);
 
+    w5500_write_l(W5500_GAR, 0, ntohl(defroute.gateway));
     return &defroute;
 }
 
@@ -114,7 +111,8 @@ int do_rt_drop(long target, unsigned int bits)
 {
     PRINTF("joynetd: rt_drop(%08lx/%u)\n", target, bits);
 
-    def_gateway = 0;
+    defroute.gateway = 0;
+    w5500_write_l(W5500_GAR, 0, ntohl(defroute.gateway));
     return 0;
 }
 
@@ -124,8 +122,8 @@ struct route *do_rt_add(long ip, unsigned int bits, long gateway, struct iface *
     PRINTF("joynetd: rt_add(%08lx/%u, %08lx, %p, %ld, %ld, %d)\n",
            ip, bits, gateway, i, metric, ttl, private);
 
-    def_gateway = htonl(gateway);
-    w5500_write_l(W5500_GAR, 0, gateway);
+    defroute.gateway = htonl(gateway);
+    w5500_write_l(W5500_GAR, 0, ntohl(defroute.gateway));
     return NULL;
 }
 
