@@ -1065,7 +1065,7 @@ int do_command(void)
 
     int res = -1;
 
-    PRINTF("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
+//    PRINTF("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
 
     w5500_ini();
 
@@ -1075,7 +1075,7 @@ int do_command(void)
         break;
 
     case _TI_get_version:
-        res = 0x00010000;  // (TBD) version
+        res = 0x00010001;
         break;
 
     case _TI_add_arp_table:
@@ -1101,11 +1101,20 @@ int do_command(void)
         break;
 
     case _TI_rt_top:
+        res = (int)do_rt_top((struct route **)arg);
+        break;
     case _TI_rt_lookup:
+        res = (int)do_rt_lookup((long)arg);
+        break;
     case _TI_rt_lookupb:
+        res = (int)do_rt_lookupb((long)arg[0], (unsigned int)arg[1]);
+        break;
     case _TI_rt_drop:
+        res = do_rt_drop((long)arg[0], (unsigned int)arg[1]);
+        break;
     case _TI_rt_add:
-        res = 0;
+        res = (int)do_rt_add((long)arg[0], (unsigned int)arg[1], (long)arg[2], (struct iface *)arg[3],
+                             (long)arg[4], (long)arg[5], (char)arg[6]);
         break;
 
     case _TI_dns_add:
@@ -1260,6 +1269,9 @@ int do_command(void)
         break;
 
     case _TI_rip:
+        res = do_rip((int)arg);
+        break;
+
     default:
         break;
     }

@@ -82,6 +82,16 @@ int do_res_mkquery(int op, char *dname, int class, int type, char *data, int dat
                    struct rrec *newrr, char *buf, int buflen);
 int do_res_send(char *msg, int msglen, char *answer, int anslen);
 
+// inetroute.c
+struct route;
+struct route **do_rt_top(struct route **def);
+struct route *do_rt_lookup(long ip);
+struct route *do_rt_lookupb(long ip, unsigned int bits);
+int do_rt_drop(long target, unsigned int bits);
+struct route *do_rt_add(long ip, unsigned int bits, long gateway, struct iface *i,
+                        long metric, long ttl, char private);
+int do_rip(int mode);
+
 // inetetc.c
 struct hostent *do_gethostbyname(const char *name);
 struct hostent *do_gethostbyaddr(const void *addr, socklen_t len, int type);

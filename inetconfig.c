@@ -190,7 +190,7 @@ void read_config(void)
         w5500_write_l(W5500_SUBR, 0, w5500_subr.a);
     }
     if (config_flags & FLAG_GW) {
-        w5500_write_l(W5500_GAR, 0, w5500_gar.a);
+        do_rt_add (0, 0, w5500_gar.a, NULL, 16, 0, 1);
     }
     if (config_flags & FLAG_DNS) {
         do_dns_add(ntohl(w5500_dns.a));
