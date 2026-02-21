@@ -1109,9 +1109,13 @@ int do_command(void)
         break;
 
     case _TI_dns_add:
+        res = do_dns_add((long)arg);
+        break;
     case _TI_dns_drop:
+        res = do_dns_drop((long)arg);
+        break;
     case _TI_dns_get:
-        res = 0;
+        res = (int)do_dns_get();
         break;
     case _TI_set_domain_name:
         res = do_set_domain_name((char *)arg);

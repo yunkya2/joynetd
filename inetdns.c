@@ -42,6 +42,14 @@
 // Macros and definitions
 //****************************************************************************
 
+struct dns
+{
+  struct dns *prev;
+  struct dns *next;
+
+  long address;
+};
+
 #define DNS_PORT 53
 #define MAX_RESPONSE_SIZE 512
 #define DNS_CACHE_MAX_ENTRIES 8
@@ -78,7 +86,8 @@ struct dns_cache_entry {
 // Global variables
 //****************************************************************************
 
-extern uint8_t w5500_dns[4];
+static in_addr_t dns_addr;
+static struct dns dns_result;
 
 static char *domainname = NULL;
 
@@ -189,6 +198,40 @@ static struct dns_cache_entry *find_dns_cache(char *dname, int class, int type)
 //****************************************************************************
 // Public functions
 //****************************************************************************
+
+struct dns;
+
+int do_dns_add(long ipaddr)
+{
+    PRINTF("joynetd: dns_add(%08lx)\n", ipaddr);
+
+    dns_addr = htonl(ipaddr);
+    return 0;
+}
+
+int do_dns_drop(long ipaddr)
+{
+    PRINTF("joynetd: dns_drop(%08lx)\n", ipaddr);
+
+    if (dns_addr == htonl(ipaddr)) {
+        dns_addr = 0;
+    }
+    return 0;
+}
+
+struct dns *do_dns_get(void)
+{
+    PRINTF("joynetd: dns_get()\n");
+
+    if (dns_addr != 0) {
+        dns_result.address = ntohl(dns_addr);
+        dns_result.prev = NULL;
+        dns_result.next = NULL;
+        return &dns_result;
+    } else {
+        return NULL;
+    }
+}
 
 int do_set_domain_name(char *name)
 {
@@ -336,7 +379,7 @@ int do_res_send(char *msg, int msglen, char *answer, int anslen)
         memset(&server_addr, 0, sizeof(server_addr));
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(DNS_PORT);
-        memcpy(&server_addr.sin_addr, w5500_dns, 4);
+        server_addr.sin_addr.s_addr = dns_addr;
         
         n = do_sendto(sock, msg, msglen, 0,
                       (struct sockaddr *)&server_addr, sizeof(server_addr));

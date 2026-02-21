@@ -69,6 +69,10 @@ struct iface *do_get_new_iface(const char *name);
 int do_link_new_iface(const struct iface *n_i);
 
 // inetdns.c
+struct dns;
+int do_dns_add(long ipaddr);
+int do_dns_drop(long ipaddr);
+struct dns *do_dns_get(void);
 struct rrec;
 int do_set_domain_name(char *name);
 char *do_get_domain_name(void);

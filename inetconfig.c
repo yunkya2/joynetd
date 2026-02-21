@@ -58,10 +58,10 @@ union inaddr {
 // Global variables
 //****************************************************************************
 
-union inaddr w5500_gar;
-union inaddr w5500_subr;
-union inaddr w5500_sipr;
-union inaddr w5500_dns;
+static union inaddr w5500_gar;
+static union inaddr w5500_subr;
+static union inaddr w5500_sipr;
+static union inaddr w5500_dns;
 static uint8_t w5500_mac[6];
 
 static int config_flags = 0;
@@ -191,6 +191,9 @@ void read_config(void)
     }
     if (config_flags & FLAG_GW) {
         w5500_write_l(W5500_GAR, 0, w5500_gar.a);
+    }
+    if (config_flags & FLAG_DNS) {
+        do_dns_add(ntohl(w5500_dns.a));
     }
 
     ifenable = (config_flags & (FLAG_IP|FLAG_MASK|FLAG_GW|FLAG_DNS)) == (FLAG_IP|FLAG_MASK|FLAG_GW|FLAG_DNS);
