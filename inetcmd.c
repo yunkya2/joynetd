@@ -427,6 +427,12 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
                 sin->sin_port = htons(w5500_read_w(W5500_Sn_DPORT, blk_sreg));
                 *addrlen = sizeof(struct sockaddr_in);
 
+                // 本来のBSDソケットのaccept()は接続が成立するとLISTEN中のソケットは
+                // そのままでESTABLISHED状態の新しいソケットが生成されるが、
+                // W5500はLISTEN状態のソケットがESTABLISHEDに変わる
+                // BSDソケットのセマンティクスに合わせるため、ESTABLISHEDになったら
+                // ソケットに新しいfdを与えて(136～)その値を返す
+
                 usock *uc = &usock_array[sno + SOCKCLNT_BASE - SOCKBASE];
                 uc->type = u->type;
                 uc->refcnt = 1;
@@ -721,8 +727,21 @@ int do_close(int sockfd)
     }
 
     if (sockfd >= SOCKCLNT_BASE) {
+        // accept()で生成されたfdがclose()された場合
+        // close後に再度openしてLISTEN状態に戻し、次のクライアントが
+        // accept()できるようにする
+
         usock_accepted &= ~(1 << sno);
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+        if (wait_status(blk_sreg, W5500_Sn_SR_CLOSED) < 0) {
+            PRINTF("socket close timeout\n");
+            return do_close(sockfd - SOCKCLNT_BASE + SOCKBASE);
+        }
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_OPEN);
+        if (wait_status(blk_sreg, W5500_Sn_SR_INIT) < 0) {
+            PRINTF("socket reopen timeout\n");
+            return do_close(sockfd - SOCKCLNT_BASE + SOCKBASE);
+        }
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
     } else {
         usock_listening &= ~(1 << sno);
