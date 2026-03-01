@@ -730,6 +730,15 @@ int do_close(int sockfd)
         do_rt_lookup(0);    // workaround for idhcpc.x
     }
 
+    if (w5500_read_b(W5500_Sn_SR, blk_sreg) == W5500_Sn_SR_ESTABLISHED) {
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_DISCON);
+        if (wait_status(blk_sreg, W5500_Sn_SR_CLOSED) < 0) {
+            PRINTF("socket disconnection timeout\n");
+            u->type = NOTUSED;
+            return 0;
+        }
+    }
+
     if (sockfd >= SOCKCLNT_BASE) {
         // accept()で生成されたfdがclose()された場合
         // close後に再度openしてLISTEN状態に戻し、次のクライアントが
