@@ -73,8 +73,10 @@ struct joynetd_data joynetd_data = {
     .vectno = 0,
 };
 
+int joy_port = 1;
+int trap_number = -2;
+char *ifname = IFNAME;
 bool ifenable = false;
-int trap_number = -1;
 
 static bool opt_r = false;  // -r option
 
@@ -134,10 +136,11 @@ int set_ifenable(bool enable)
 
 void help(void)
 {
-    printf("使用法: joynetd [-r] [-p|-j<port number>] [-t<trap number>]\n");
+    printf("使用法: joynetd [-r] [-p|-j<port number>] [-t<trap number>] [-i<interface name>]\n");
     printf("  -r       常駐解除\n");
     printf("  -p|-j    使用するジョイスティックポート番号 (1 or 2) (default: 1)\n");
-    printf("  -t       APIのtrap番号 (0～7)\n");
+    printf("  -t       APIのtrap番号 (0～7/-1/-2) (default: -1(auto))\n");
+    printf("  -i       使用するネットワークインターフェース名 (default: en0)\n");
     exit(1);
 }
 
@@ -145,9 +148,9 @@ int main(int argc, char **argv)
 {
     _dos_print("X680x0 Ethernet Joy-kun Network driver (version " GIT_REPO_VERSION ")\r\n");
 
-    int port = 1;
-    int trap = -2;
+    read_config();
 
+    int v;
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] == '-' || argv[i][0] == '/') {
             switch (argv[i][1]) {
@@ -156,16 +159,24 @@ int main(int argc, char **argv)
                 break;
             case 'p':
             case 'j':
-                port = atoi(&argv[i][2]);
-                if (port < 1 || port > 2) {
+                v = atoi(&argv[i][2]);
+                if (v < 1 || v > 2) {
                     help();
                 }
+                joy_port = v;
                 break;
             case 't':
-                trap = atoi(&argv[i][2]);
-                if (trap > 7) {
+                v = atoi(&argv[i][2]);
+                if (v > 7) {
                     help();
                 }
+                trap_number = v;
+                break;
+            case 'i':
+                if (strlen(&argv[i][2]) == 0) {
+                    help();
+                }
+                ifname = &argv[i][2];
                 break;
             default:
                 help();
@@ -174,9 +185,9 @@ int main(int argc, char **argv)
         }
     }
 
-    w5500_select(port);
-    joyget_stat = 0x4b00 + port;
-    joyget_port = port - 1;
+    w5500_select(joy_port);
+    joyget_stat = 0x4b00 + joy_port;
+    joyget_port = joy_port - 1;
 
     _dos_super(0);
 
@@ -230,30 +241,29 @@ int main(int argc, char **argv)
     }
 
     init_etc_files();
-    read_config();
+    set_config();
     set_ifenable(ifenable);
 
     w5500_fin();
 
-    if (trap < -1) {    // 未使用のtrap番号を探す
-        for (trap = 0; trap < 8; trap++) {
-            if ((int)_dos_intvcg(trap + 0x20) >= 0x01000000) {
+    if (trap_number < -1) {    // 未使用のtrap番号を探す
+        for (trap_number = 0; trap_number < 8; trap_number++) {
+            if ((int)_dos_intvcg(trap_number + 0x20) >= 0x01000000) {
                 break;
             }
         }
-        if (trap >= 8) {
-            trap = -1;  // trapが空いていないので使用しない
+        if (trap_number >= 8) {
+            trap_number = -1;  // trapが空いていないので使用しない
         }
     }
-    if (trap >= 0) {
-        if ((int)_dos_intvcg(trap + 0x20) < 0x01000000) {
+    if (trap_number >= 0) {
+        if ((int)_dos_intvcg(trap_number + 0x20) < 0x01000000) {
             _dos_print("指定されたtrap番号は既に使用されています\r\n");
             return 1;
         }
         extern int trap_entry(void);
-        joynetd_data.vectno = trap + 0x20;
+        joynetd_data.vectno = trap_number + 0x20;
         joynetd_data.oldvect = _dos_intvcs(joynetd_data.vectno, trap_entry);
-        trap_number = trap;
     }
     PRINTF("joynetd: using trap number %d\n", trap_number);
 

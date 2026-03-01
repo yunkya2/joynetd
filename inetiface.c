@@ -103,7 +103,6 @@ static int iface_dummy(struct iface *);
 
 static iface joyif = {
     .next = NULL,
-    .name = IFNAME,
 
     .config = (void *)iface_dummy,
     .stop = iface_stop,
@@ -154,6 +153,7 @@ struct iface *do_get_iface_list(void)
     PRINTF("joynetd: do_get_iface_list()\n");
 
     w5500_read(W5500_SHAR, 0, (uint8_t *)joyif.my_hw_addr, 6);
+    joyif.name = ifname;
     joyif.my_ip_addr = w5500_read_l(W5500_SIPR, 0);
     joyif.net_mask = w5500_read_l(W5500_SUBR, 0);
     joyif.broad_cast = (joyif.my_ip_addr & joyif.net_mask) | (0xffffffff & ~joyif.net_mask);
@@ -171,7 +171,7 @@ struct iface *do_get_new_iface(const char *name)
 {
     PRINTF("joynetd: do_get_new_iface(%s)\n", name);
 
-    return strcmp(name, IFNAME) == 0 ? do_get_iface_list() : NULL;
+    return strcmp(name, ifname) == 0 ? do_get_iface_list() : NULL;
 }
 
 int do_link_new_iface(const struct iface *i)

@@ -42,8 +42,10 @@
 #define IFNAME "en0"
 
 // joynetd.c
-extern bool ifenable;
+extern int joy_port;
 extern int trap_number;
+extern char *ifname;
+extern bool ifenable;
 int set_ifenable(bool enable);
 
 // inetcmd.c
@@ -107,5 +109,6 @@ void fini_etc_files(void);
 
 // inetconfig.c
 void read_config(void);
+void set_config(void);
 
 #endif /* _JOYNETD_H_ */

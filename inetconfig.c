@@ -99,11 +99,32 @@ void read_config(void)
     strcpy(cfgname, psp->exe_path);
     strcat(cfgname, "joynetd.cfg");
     if ((fp = fopen(cfgname, "r")) != NULL) {
+        int v;
         char line[256];
         char *p;
         char *q;
         while (fgets(line, sizeof(line), fp) != NULL) {
-            if (strncasecmp(line, "mac=", 4) == 0) {
+            if (strncasecmp(line, "port=", 5) == 0) {
+                v = atoi(&line[5]);
+                if (v >= 1 && v <= 2) {
+                    joy_port = v;
+                }
+            } else if (strncasecmp(line, "trap=", 5) == 0) {
+                v = atoi(&line[5]);
+                if (v < 8) {
+                    trap_number = v;
+                }
+            } else if (strncasecmp(line, "ifname=", 7) == 0) {
+                char *n = &line[7];
+                size_t len = strlen(n);
+                if (len > 0 && n[len - 1] == '\n') {
+                    n[len - 1] = '\0';
+                    ifname = malloc(len + 1);
+                    if (ifname) {
+                        strcpy(ifname, n);
+                    }
+                }
+            } else if (strncasecmp(line, "mac=", 4) == 0) {
                 p = &line[4];
                 for (int i = 0; i < 6; i++) {
                     w5500_mac[i] = strtoul(p, &q, 16);
@@ -145,7 +166,10 @@ void read_config(void)
         }
         fclose(fp);
     }
+}
 
+void set_config(void)
+{
     if (!(config_flags & FLAG_MAC)) {
         printf("※ joynetd.cfg にMACアドレスの指定がないため、ランダムMACアドレスを使用します\n");
     }
