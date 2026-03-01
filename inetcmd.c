@@ -145,24 +145,19 @@ static int wait_status(int blk_sreg, uint8_t status)
 static int wait_data(int blk_sreg, int reg, int status, int nonblock)
 {
     int len;
+    int sr;
 
     do {
+        sr = w5500_read_b(W5500_Sn_SR, blk_sreg);
         len = w5500_read_w(reg, blk_sreg);
 #ifdef DEBUG
         PRINTF("%d ", len); fflush(stdout);
 #endif
-        if (len > 0) {
+        if (len > 0 || (nonblock && sr == status)) {
             PRINTF("\n");
             return len;
         }
-        if (nonblock) {
-            if (w5500_read_b(W5500_Sn_SR, blk_sreg) != status) {
-                break;
-            }
-            PRINTF("\n");
-            return len;
-        }
-    } while (w5500_read_b(W5500_Sn_SR, blk_sreg) == status);
+    } while (sr == status);
 
     PRINTF("socket closed\n");
     return -1;
@@ -749,24 +744,30 @@ int do_socklen(int sockfd, int mode)
     int blk_sreg = sno * 4 + 1;
     usock *u = &usock_array[sockfd - SOCKBASE];
 
-    if (u->type == TYPE_TCP) {
-        if (w5500_read_b(W5500_Sn_SR, blk_sreg) != W5500_Sn_SR_ESTABLISHED) {
-            PRINTF("socket not in ESTABLISHED state\n");
-            errno = EINVAL;
-            return -1;
-        }
-    }
+    int len;
+    int sr;
 
+    sr = w5500_read_b(W5500_Sn_SR, blk_sreg);
     switch (mode) {
     case 0:     // get receive data size
-        PRINTF("--> %d\n", w5500_read_w(W5500_Sn_RX_RSR, blk_sreg));
-        return w5500_read_w(W5500_Sn_RX_RSR, blk_sreg);
+        len = w5500_read_w(W5500_Sn_RX_RSR, blk_sreg);
+        PRINTF("--> %d\n", len);
+        break;
     case 1:     // get send data size
-        return W5500_SOCK_BUF_SIZE - w5500_read_w(W5500_Sn_TX_FSR, blk_sreg);
+        len = W5500_SOCK_BUF_SIZE - w5500_read_w(W5500_Sn_TX_FSR, blk_sreg);
+        break;
     default:
         errno = EINVAL;
         return -1;
     }
+
+    if (len == 0 && u->type == TYPE_TCP && sr != W5500_Sn_SR_ESTABLISHED) {
+        PRINTF("socket not in ESTABLISHED state\n");
+        errno = EINVAL;
+        return -1;
+    }
+
+    return len;
 }
 
 int do_getsockname(int sockfd, char *name, int *namelen)
