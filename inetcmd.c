@@ -494,17 +494,21 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         return -1;
     }
 
-    if (wait_status(blk_sreg, W5500_Sn_SR_ESTABLISHED) < 0) {
-        PRINTF("connect timeout\n");
-        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
-        usock_connecting &= ~(1 << sno);
-        errno = ECONNREFUSED;
-        return -1;
-    }
+    int stat;
+    do {
+        stat = w5500_read_b(W5500_Sn_SR, blk_sreg);
+        if (stat == W5500_Sn_SR_ESTABLISHED) {
+            usock_connecting &= ~(1 << sno);
+            PRINTF("S0_IR=%02x\n", w5500_read_b(W5500_Sn_IR, blk_sreg));
+            return 0;
+        }
+    } while (stat == W5500_Sn_SR_INIT || stat == W5500_Sn_SR_SYNSENT);
 
+    PRINTF("connection refused\n");
+    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
     usock_connecting &= ~(1 << sno);
-    PRINTF("S0_IR=%02x\n", w5500_read_b(W5500_Sn_IR, blk_sreg));
-    return 0;
+    errno = ECONNREFUSED;
+    return -1;
 }
 
 ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
