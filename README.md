@@ -181,6 +181,24 @@ MACアドレスはネットワーク上の機器を識別するための48ビッ
 「イーサネットじょい君」を接続するネットワークのDNSサーバのIPアドレスを指定します
 (通常はルーターのIPアドレスになります)。
 
+#### `port`: ジョイスティックポート番号
+
+「イーサネットじょい君」を接続するジョイスティックポート番号を 1 または 2 の数値で指定します
+(コマンドラインオプションの -p / -j の指定が優先されます)。
+
+#### `trap`: APIが使用するtrap番号
+
+ネットワークAPIで使用するtrap番号 0 から 7 の値で指定します。
+- -1 を指定すると未使用のtrap番号を自動的に割り当てます(デフォルト設定)
+- -2 を指定するとAPI呼び出しにtrap命令を使用しません
+
+(コマンドラインオプションの -t の指定が優先されます)
+
+#### `ifname`: ネットワークインターフェース名
+
+ifconfig等で使用するネットワークインターフェース名を指定します。
+デフォルトは `en0` になります
+(コマンドラインオプションの -i の指定が優先されます)。
 
 ## 動作確認済みアプリケーション
 
@@ -191,6 +209,7 @@ MACアドレスはネットワーク上の機器を識別するための48ビッ
 - [smbfs, smbclient](https://github.com/yunkya2/smbfs-x68k)
 - [httpsget](https://github.com/yunkya2/httpsget)
 - [WebXpressionPlus](https://github.com/yunkya2/WebXpressionPlus)
+- [netcat](https://github.com/yunkya2/netcat-x68k)
 - [idhcpc](https://github.com/68fpjc/idhcpc)
 
 使用方法は各コマンドのドキュメントを参照してください。
