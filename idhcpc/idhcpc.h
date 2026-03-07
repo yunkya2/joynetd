@@ -19,7 +19,7 @@ typedef enum {
   ERR_NOSID,       /* DHCP サーバ IP アドレス取得エラー */
   ERR_NOTKEPT,     /* 常駐していない */
   ERR_ALREADYKEPT, /* すでに常駐している */
-} errno;
+} dherrno;
 
 /* idhcpc ワーク */
 /* tsrarea.s とサイズを合わせること */
@@ -36,8 +36,8 @@ typedef struct {
   char ifname[8];                 /* インタフェース名 */
 } idhcpcinfo;
 
-errno idhcp_request(const int, const char *);
-errno idhcp_release(const int, const char *);
-errno idhcp_get_remaining(const char *, const int, int *);
+dherrno idhcp_request(const int, const char *);
+dherrno idhcp_release(const int, const char *);
+dherrno idhcp_get_remaining(const char *, const int, int *);
 
 #endif /* IDHCPC_H */

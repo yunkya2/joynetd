@@ -19,21 +19,21 @@ typedef struct {
 
 static int initialize(const char *);
 static udpsockets create_sockets(void);
-static errno prepare_iface(const char *, iface **, dhcp_hw_addr *);
-static errno prepare_discover(iface *, udpsockets *, struct sockaddr_in *);
-static errno discover_dhcp_server(const int, const dhcp_hw_addr *,
+static dherrno prepare_iface(const char *, iface **, dhcp_hw_addr *);
+static dherrno prepare_discover(iface *, udpsockets *, struct sockaddr_in *);
+static dherrno discover_dhcp_server(const int, const dhcp_hw_addr *,
                                   const udpsockets *, unsigned long *,
                                   unsigned long *, struct sockaddr_in *);
-static errno request_to_dhcp_server(const int, const dhcp_hw_addr *,
+static dherrno request_to_dhcp_server(const int, const dhcp_hw_addr *,
                                     const udpsockets *, const unsigned long,
                                     const unsigned long, struct sockaddr_in *,
                                     iface *);
-static errno send_and_receive(const int, const dhcp_hw_addr *,
+static dherrno send_and_receive(const int, const dhcp_hw_addr *,
                               const udpsockets *, const unsigned long,
                               const unsigned long, const int, dhcp_msg *,
                               struct sockaddr_in *);
-static errno fill_idhcpcinfo(unsigned long *, char *, dhcp_msg *);
-static errno release_config(const int, iface *, dhcp_hw_addr *, udpsockets *);
+static dherrno fill_idhcpcinfo(unsigned long *, char *, dhcp_msg *);
+static dherrno release_config(const int, iface *, dhcp_hw_addr *, udpsockets *);
 static void close_sockets(udpsockets *);
 static void iface_when_discover(iface *);
 static void iface_when_request(const unsigned long, const char *, iface *);
@@ -50,8 +50,8 @@ idhcpcinfo g_idhcpcinfo = {0};
  * @param ifname インタフェース名
  * @return エラーコード
  */
-errno idhcp_request(const int verbose, const char *ifname) {
-  errno err;
+dherrno idhcp_request(const int verbose, const char *ifname) {
+  dherrno err;
 
   if (initialize(ifname)) {
     err = ERR_ALREADYKEPT;
@@ -87,8 +87,8 @@ errno idhcp_request(const int verbose, const char *ifname) {
  * @param ifname インタフェース名
  * @return エラーコード
  */
-errno idhcp_release(const int verbose, const char *ifname) {
-  errno err;
+dherrno idhcp_release(const int verbose, const char *ifname) {
+  dherrno err;
 
   if (!initialize(ifname)) {
     err = ERR_NOTKEPT;
@@ -118,8 +118,8 @@ errno idhcp_release(const int verbose, const char *ifname) {
  * @param[out] pleasetime 残りリース期間格納域. 無期限の場合は -1 が格納される
  * @return エラーコード
  */
-errno idhcp_get_remaining(const char *ifname, const int force, int *pleasetime) {
-  errno err;
+dherrno idhcp_get_remaining(const char *ifname, const int force, int *pleasetime) {
+  dherrno err;
 
   if (!initialize(ifname) && !force) {
     err = ERR_NOTKEPT;
@@ -174,7 +174,7 @@ static udpsockets create_sockets(void) {
  * @param phwaddr ハードウェアアドレス情報格納域
  * @return エラーコード
  */
-static errno prepare_iface(const char *ifname, iface **ppiface,
+static dherrno prepare_iface(const char *ifname, iface **ppiface,
                            dhcp_hw_addr *phwaddr) {
   {
     iface *p;
@@ -195,7 +195,7 @@ static errno prepare_iface(const char *ifname, iface **ppiface,
  * @param[out] pinaddr_s 送信用ソケット情報格納域
  * @return エラーコード
  */
-static errno prepare_discover(iface *piface, udpsockets *psockets,
+static dherrno prepare_discover(iface *piface, udpsockets *psockets,
                               struct sockaddr_in *pinaddr_s) {
   /* INIT 時のネットワークインタフェース設定 */
   iface_when_discover(piface);
@@ -231,12 +231,12 @@ static errno prepare_discover(iface *piface, udpsockets *psockets,
  * @param[out] pinaddr_s 送信用ソケット情報格納域
  * @return エラーコード
  */
-static errno discover_dhcp_server(const int verbose,
+static dherrno discover_dhcp_server(const int verbose,
                                   const dhcp_hw_addr *phwaddr,
                                   const udpsockets *psockets,
                                   unsigned long *pme, unsigned long *pserver,
                                   struct sockaddr_in *pinaddr_s) {
-  errno err;
+  dherrno err;
   dhcp_msg msg;
 
   if ((err = send_and_receive(verbose, phwaddr, psockets, 0, 0, DHCPDISCOVER,
@@ -266,11 +266,11 @@ static errno discover_dhcp_server(const int verbose,
  * @param[out] piface インタフェース
  * @return エラーコード
  */
-static errno request_to_dhcp_server(
+static dherrno request_to_dhcp_server(
     const int verbose, const dhcp_hw_addr *phwaddr, const udpsockets *psockets,
     const unsigned long me, const unsigned long server,
     struct sockaddr_in *pinaddr_s, iface *piface) {
-  errno err;
+  dherrno err;
   dhcp_msg msg;
   unsigned long subnetmask;
   char domainname[256];
@@ -305,7 +305,7 @@ static errno request_to_dhcp_server(
  * @param[out] pinaddr_s 送信用ソケット情報格納域
  * @return エラーコード
  */
-static errno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
+static dherrno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
                               const udpsockets *psockets,
                               const unsigned long me,
                               const unsigned long server, const int msgtype_s,
@@ -420,7 +420,7 @@ static errno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
  * @param[out] pmsg DHCPOFFER または DHCPACK で受信した DHCP メッセージ
  * @return エラーコード
  */
-static errno fill_idhcpcinfo(unsigned long *pmask, char *pdomain,
+static dherrno fill_idhcpcinfo(unsigned long *pmask, char *pdomain,
                              dhcp_msg *pmsg) {
   if ((g_pidhcpcinfo->me = dhcp_get_yiaddr(pmsg)) == 0) { /* 要求 IP アドレス */
     return ERR_NOYIADDR;
@@ -461,7 +461,7 @@ static errno fill_idhcpcinfo(unsigned long *pmask, char *pdomain,
  * @param[out] psockets UDP ソケット
  * @return エラーコード
  */
-static errno release_config(const int verbose, iface *piface,
+static dherrno release_config(const int verbose, iface *piface,
                             dhcp_hw_addr *phwaddr, udpsockets *psockets) {
   dhcp_msg msg; /* DHCP メッセージバッファ */
   struct sockaddr_in inaddr_s;
