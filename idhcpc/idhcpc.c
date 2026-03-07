@@ -314,12 +314,12 @@ static dherrno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
   struct sockaddr_in inaddr_r;
   unsigned char msgtype_r; /* 受信データのメッセージタイプ */
   unsigned long xid;       /* トランザクション ID */
-  int wait = 4;            /* タイムアウト秒数 */
+  int wait = 2;            /* タイムアウト秒数 */
   int timeout = 1;         /* タイムアウトフラグ */
   int i;                   /* ループカウンタ */
 
-  /* 最大4回再送 (計5回送信) */
-  for (i = 0; i < 5; i++) {
+  /* 最大2回再送 (計3回送信) */
+  for (i = 0; i < 3; i++) {
     if (verbose) {
       if (i > 0) printf("リトライします (%d 回目) ...\n", i);
       fflush(stdout);
@@ -358,9 +358,9 @@ static dherrno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
       fflush(stdout);
     }
     {
-      /* 4, 8, 16, 32, 64 ± 1 秒くらい */
-      int rest = (wait * 100 + rand() % 199 - 99) * 10;
-      int interval = 500;
+      /* 2, 4, 8 ± 0.5 秒くらい */
+      int rest = (wait * 100 + rand() % 99 - 49) * 10;
+      int interval = 100;
 
       do {
         if (do_socklen(psockets->r, 0) == 0) {
