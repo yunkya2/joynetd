@@ -39,6 +39,7 @@
 
 #include "network.h"
 #include "w5500.h"
+#include "idhcpc/idhcpc.h"
 
 #define NOSPEC_INT      -99999
 #define NOSPEC_STR      NULL
@@ -46,11 +47,13 @@
 #define DEFAULT_PORT        0
 #define DEFAULT_TRAP        -2
 #define DEFAULT_IFNAME      "en0"
+#define DEFAULT_DHCP        1
 
 // joynetd.c
 extern int joy_port;
 extern int trap_number;
 extern char *ifname;
+extern int dhcp_mode;
 extern bool ifenable;
 int set_ifenable(bool enable);
 

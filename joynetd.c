@@ -79,6 +79,7 @@ char *cfgfile = NULL;
 int joy_port = NOSPEC_INT;
 int trap_number = NOSPEC_INT;
 char *ifname = NOSPEC_STR;
+int dhcp_mode = NOSPEC_INT;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
@@ -194,6 +195,16 @@ static int parse_cmdline(int argc, char **argv)
                 }
                 ifname = p;
                 break;
+            case 'd':
+                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                v = atoi(p);
+                if (v < 0 || v > 1) {
+                    return -1;
+                }
+                dhcp_mode = v;
+                break;
             default:
                 return -1;
             }
@@ -205,13 +216,14 @@ static int parse_cmdline(int argc, char **argv)
 static void help(void)
 {
     printf(
-        "使用法: joynetd [-r][-c] [-f<config file>] [-p|-j<port number>] [-t<trap number>] [-i<interface name>]\n"
+        "使用法: joynetd [-r][-c] [-f<config file>] [-p|-j<port number>] [-t<trap number>] [-i<interface name>] [-d<dhcp mode>]\n"
         "  -r       常駐解除\n"
         "  -c       設定ファイルを生成する\n"
         "  -f       設定ファイルのパスを指定する\n"
         "  -p|-j    使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n"
         "  -t       APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i       使用するネットワークインターフェース名 (default: en0)\n"
+        "  -d       DHCP使用モード (0:使用しない / 1:使用する(default))\n"
     );
     exit(1);
 }
@@ -281,6 +293,9 @@ int main(int argc, char **argv)
     if (ifname == NOSPEC_STR) {
         ifname = DEFAULT_IFNAME;
     }
+    if (dhcp_mode == NOSPEC_INT) {
+        dhcp_mode = DEFAULT_DHCP;
+    }
 
     if (read_config(cfgfile) < 0) {
         return 1;
@@ -323,6 +338,15 @@ int main(int argc, char **argv)
     init_etc_files();
     set_config();
     set_ifenable(ifenable);
+
+    if (dhcp_mode) {
+        _dos_print("ネットワーク設定をDHCPで取得しています...\r\n");
+        if (idhcp_request(1, ifname) != 0) {
+            _dos_print("DHCPリースの取得に失敗しました\r\n");
+        } else {
+            _dos_print("DHCPリースの取得に成功しました\r\n");
+        }
+    }
 
     w5500_fin();
 
