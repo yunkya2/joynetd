@@ -51,19 +51,33 @@ int set_ifenable(bool enable);
 
 // inetcmd.c
 int do_socket(int domain, int type, int protocol);
+int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+int do_listen(int sockfd, int backlog);
+int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-ssize_t do_read(int sockfd, void *buf, size_t count);
-ssize_t do_write(int sockfd, const void *buf, size_t count);
 ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
                     int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 ssize_t do_sendto(int sockfd, const void *buf, size_t len,
                   int flags, struct sockaddr *dest_addr, socklen_t addrlen);
 int do_close(int sockfd);
 int do_socklen(int sockfd, int mode);
-
+int do_getsockname(int sockfd, char *name, int *namelen);
+int do_getpeername(int sockfd, char *peer, int *peerlen);
+int do_sockkick(int sockfd);
+int do_shutdown(int sockfd, int how);
+int do_usesock(int sockfd);
+int do_rrecvchar(int sockfd);
+int do_recvchar(int sockfd);
+int do_recvline(int sockfd, char *buf, size_t len);
+int do_sendline(int sockfd, const char *buf, size_t len);
+int do_usflush(int sockfd);
 int do_seteol(int sockfd, char *seq);
 int do_sockmode(int sockfd, int mode);
 int do_setflush(int sockfd, int chr);
+char *do_psocket(long *arg);
+char *do_sockerr(int sockfd);
+char *do_sockstate(int sockfd);
+int do_command(void);
 
 // inetiface.c
 struct iface;
