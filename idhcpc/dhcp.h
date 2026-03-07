@@ -54,6 +54,7 @@ typedef struct tagdhcp_msg {
 #define DHCP_HOSTNAME 12
 #define DHCP_BOOTSIZE 13
 #define DHCP_DOMAINNAME 15
+#define DHCP_BROADCASTADDR 28
 #define DHCP_REQIPADDR 50
 #define DHCP_LEASETIME 51
 #define DHCP_MSGTYPE 53

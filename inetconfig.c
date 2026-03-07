@@ -161,6 +161,16 @@ int read_config(const char *cfgfile)
         } else if (strncasecmp(line, "dhcp=", 5) == 0) {
             v = atoi(&line[5]);
             dhcp_mode = (v == 0) ? 0 : 1;
+        } else if (strncasecmp(line, "hostname=", 9) == 0) {
+            char *n = &line[9];
+            size_t len = strlen(n);
+            if (len > 0 && n[len - 1] == '\n') {
+                n[len - 1] = '\0';
+                hostname = malloc(len + 1);
+                if (hostname) {
+                    strcpy(hostname, n);
+                }
+            }
         } else if (strncasecmp(line, "mac=", 4) == 0) {
             p = &line[4];
             for (int i = 0; i < 6; i++) {
@@ -238,7 +248,9 @@ int create_config(const char *cfgfile)
                 ifname == NOSPEC_STR ? ";" : "",
                 ifname == NOSPEC_STR ? DEFAULT_IFNAME : ifname,
                 dhcp_mode == NOSPEC_INT ? ";" : "",
-                dhcp_mode == NOSPEC_INT ? DEFAULT_DHCP : dhcp_mode
+                dhcp_mode == NOSPEC_INT ? DEFAULT_DHCP : dhcp_mode,
+                hostname == NOSPEC_STR ? ";" : "",
+                hostname == NOSPEC_STR ? "" : hostname
         );
         fclose(fp);
     }

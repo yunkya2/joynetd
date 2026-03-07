@@ -9,6 +9,7 @@
 static unsigned char *dhcp_msg_common(const dhcp_hw_addr *, const unsigned long,
                                       const unsigned short, const unsigned char,
                                       dhcp_msg *);
+static unsigned char *dhcp_opt_hostname(const char *, unsigned char *);
 
 /**
  * @brief DHCPDISCOVER メッセージ作成
@@ -34,6 +35,8 @@ void dhcp_make_dhcpdiscover(const dhcp_hw_addr *phwaddr,
     memcpy(p, &tmp, 2);
     p += 2;
   }
+
+  p = dhcp_opt_hostname(hostname, p);
 
   /* おしまい */
   *p = DHCP_END;
@@ -87,6 +90,8 @@ void dhcp_make_dhcprequest(const dhcp_hw_addr *phwaddr,
   *p++ = DHCP_LEASETIME;
   *p++ = DHCP_RENEWTIME;
   *p++ = DHCP_REBINDTIME;
+
+  p = dhcp_opt_hostname(hostname, p);
 
   /* おしまい */
   *p = DHCP_END;
@@ -162,6 +167,25 @@ static unsigned char *dhcp_msg_common(const dhcp_hw_addr *phwaddr,
   *p++ = phwaddr->hw_addr_len;
   memcpy(p, &phwaddr->hw_addr, phwaddr->hw_addr_len);
   p += phwaddr->hw_addr_len;
+
+  return p;
+}
+
+/**
+ * @brief DHCP メッセージにホスト名オプションを追加する
+ * @param hostname ホスト名
+ * @param[out] p オプション追加開始アドレス
+ * @return
+ */
+
+ static unsigned char *dhcp_opt_hostname(const char *hostname, unsigned char *p) {
+  int len = strlen(hostname);
+  if (hostname && len > 0) {
+    *p++ = DHCP_HOSTNAME;
+    *p++ = (unsigned char)len;
+    memcpy(p, hostname, len);
+    p += len;
+  }
 
   return p;
 }
@@ -433,6 +457,10 @@ void dhcp_print(const dhcp_msg *pmsg) {
         strncpy((char *)buf, (char *)p, msglen);
         printf("\t%02d (DHCP_DOMAINNAME): %s\n", DHCP_DOMAINNAME, buf);
         break;
+      case DHCP_BROADCASTADDR:
+        printf("\t%02d (DHCP_BROADCASTADDR): %s\n", DHCP_BROADCASTADDR,
+               n2a_ipaddr((long)IPADDR(p[0], p[1], p[2], p[3]), buf));
+        break;
       case DHCP_REQIPADDR:
         printf("\t%02d (DHCP_REQIPADDR): %s\n", DHCP_REQIPADDR,
                n2a_ipaddr((long)IPADDR(p[0], p[1], p[2], p[3]), buf));
@@ -493,8 +521,14 @@ void dhcp_print(const dhcp_msg *pmsg) {
         printf("\t%02d (DHCP_REBINDTIME): %u sec.\n", DHCP_REBINDTIME,
                (unsigned int)ntohl(IPADDR(p[0], p[1], p[2], p[3])));
         break;
-      case DHCP_CLIENTID:
-        printf("\t%02d (DHCP_CLIENTID):", DHCP_CLIENTID);
+      default:
+        if (itemtype == DHCP_PARAMLIST) {
+          printf("\t%02d (DHCP_PARAMLIST):", DHCP_PARAMLIST);
+        } else if (itemtype == DHCP_CLIENTID) {
+          printf("\t%02d (DHCP_CLIENTID):", DHCP_CLIENTID);
+        } else {
+          printf("\t%02d (unknown):", itemtype);
+        }
         {
           int i;
           for (i = 0; i < msglen; i++) {
@@ -502,9 +536,6 @@ void dhcp_print(const dhcp_msg *pmsg) {
           }
         }
         printf("\n");
-        break;
-      default:
-        printf("\t%02d (unknown)\n", itemtype);
         break;
     }
     p += msglen;

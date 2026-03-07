@@ -80,10 +80,12 @@ int joy_port = NOSPEC_INT;
 int trap_number = NOSPEC_INT;
 char *ifname = NOSPEC_STR;
 int dhcp_mode = NOSPEC_INT;
+char *hostname = NOSPEC_STR;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
 static bool opt_c = false;  // -c option
+static bool opt_v = false;  // -v option
 
 //****************************************************************************
 // Private functions
@@ -168,6 +170,9 @@ static int parse_cmdline(int argc, char **argv)
             case 'c':
                 opt_c = true;
                 break;
+            case 'v':
+                opt_v = true;
+                break;
             case 'p':
             case 'j':
                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
@@ -205,6 +210,12 @@ static int parse_cmdline(int argc, char **argv)
                 }
                 dhcp_mode = v;
                 break;
+            case 'h':
+                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                hostname = p;
+                break;
             default:
                 return -1;
             }
@@ -216,14 +227,17 @@ static int parse_cmdline(int argc, char **argv)
 static void help(void)
 {
     printf(
-        "使用法: joynetd [-r][-c] [-f<config file>] [-p|-j<port number>] [-t<trap number>] [-i<interface name>] [-d<dhcp mode>]\n"
-        "  -r       常駐解除\n"
-        "  -c       設定ファイルを生成する\n"
-        "  -f       設定ファイルのパスを指定する\n"
-        "  -p|-j    使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n"
-        "  -t       APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
-        "  -i       使用するネットワークインターフェース名 (default: en0)\n"
-        "  -d       DHCP使用モード (0:使用しない / 1:使用する(default))\n"
+        "使用法: joynetd [オプション]\n"
+        "オプション:\n"
+        "  -r                 常駐解除\n"
+        "  -c                 設定ファイルを生成する\n"
+        "  -v                 詳細表示\n"
+        "  -f<config file>    設定ファイルのパスを指定する\n"
+        "  -p|-j<port number> 使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n"
+        "  -t<trap number>    APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
+        "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
+        "  -d<dhcp mode>      DHCP使用モード (0:使用しない / 1:使用する) (default: 1)\n"
+        "  -h<host name>      DHCP使用時のホスト名 (default: なし)\n"
     );
     exit(1);
 }
@@ -296,6 +310,9 @@ int main(int argc, char **argv)
     if (dhcp_mode == NOSPEC_INT) {
         dhcp_mode = DEFAULT_DHCP;
     }
+    if (hostname == NOSPEC_STR) {
+        hostname = DEFAULT_HOSTNAME;
+    }
 
     if (read_config(cfgfile) < 0) {
         return 1;
@@ -341,7 +358,7 @@ int main(int argc, char **argv)
 
     if (dhcp_mode) {
         _dos_print("ネットワーク設定をDHCPで取得しています...\r\n");
-        if (idhcp_request(1, ifname) != 0) {
+        if (idhcp_request(opt_v, ifname) != 0) {
             _dos_print("DHCPリースの取得に失敗しました\r\n");
         } else {
             _dos_print("DHCPリースの取得に成功しました\r\n");
