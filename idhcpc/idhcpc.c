@@ -363,7 +363,7 @@ static dherrno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
       int interval = 500;
 
       do {
-        if (do_socklen(psockets->r, 0)) {
+        if (do_socklen(psockets->r, 0) == 0) {
           if (verbose) { /* インチキプログレス表示 */
             printf(".");
             fflush(stdout);
