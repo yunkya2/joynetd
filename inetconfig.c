@@ -226,7 +226,15 @@ int create_config(const char *cfgfile)
         _dos_print("設定ファイルの生成に失敗しました\r\n");
         return -1;
     } else {
-        fprintf(fp, joynetd_cfg_tmpl, mactoa(w5500_mac));
+        fprintf(fp, joynetd_cfg_tmpl,
+                mactoa(w5500_mac),
+                joy_port == NOSPEC_INT ? ";" : "",
+                joy_port == NOSPEC_INT ? DEFAULT_PORT : joy_port,
+                trap_number == NOSPEC_INT ? ";" : "",
+                trap_number == NOSPEC_INT ? DEFAULT_TRAP : trap_number,
+                ifname == NOSPEC_STR ? ";" : "",
+                ifname == NOSPEC_STR ? DEFAULT_IFNAME : ifname
+        );
         fclose(fp);
     }
     _dos_print("設定ファイルを生成しました\r\n");

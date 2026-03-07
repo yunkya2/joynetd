@@ -75,10 +75,10 @@ struct joynetd_data joynetd_data = {
     .joyport = -1,
 };
 
-int joy_port = -1;
-int trap_number = -2;
-char *ifname = IFNAME;
 char *cfgfile = NULL;
+int joy_port = NOSPEC_INT;
+int trap_number = NOSPEC_INT;
+char *ifname = NOSPEC_STR;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
@@ -270,6 +270,17 @@ int main(int argc, char **argv)
     // 常駐処理
 
     _dos_super(0);
+
+    // コマンドラインで指定されなかった設定のデフォルト値を設定する
+    if (joy_port == NOSPEC_INT) {
+        joy_port = DEFAULT_PORT;
+    }
+    if (trap_number == NOSPEC_INT) {
+        trap_number = DEFAULT_TRAP;
+    }
+    if (ifname == NOSPEC_STR) {
+        ifname = DEFAULT_IFNAME;
+    }
 
     if (read_config(cfgfile) < 0) {
         return 1;

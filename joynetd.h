@@ -40,7 +40,12 @@
 #include "network.h"
 #include "w5500.h"
 
-#define IFNAME "en0"
+#define NOSPEC_INT      -99999
+#define NOSPEC_STR      NULL
+
+#define DEFAULT_PORT        0
+#define DEFAULT_TRAP        -2
+#define DEFAULT_IFNAME      "en0"
 
 // joynetd.c
 extern int joy_port;
