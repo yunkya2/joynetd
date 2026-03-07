@@ -34,11 +34,7 @@ typedef struct {
   unsigned long gateway;          /* デフォルトゲートウェイ */
   unsigned long dns[256 / 4 - 1]; /* DNS サーバアドレス */
   char ifname[8];                 /* インタフェース名 */
-  char magic[64];                 /* 常駐チェック用文字列 */
 } idhcpcinfo;
-
-void keeppr_and_exit(void);
-int freepr(const char *);
 
 errno try_to_keep(const int, const char *);
 errno try_to_release(const int, const char *);

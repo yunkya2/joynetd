@@ -11,7 +11,7 @@
  * @param
  * @return ソケット識別子（socket()の戻り値）。<0ならエラー
  */
-int create_udp_socket(void) { return socket(AF_INET, SOCK_DGRAM, 0); }
+int create_udp_socket(void) { return do_socket(AF_INET, SOCK_DGRAM, 0); }
 
 /**
  * @brief ソケット接続要求
@@ -24,7 +24,7 @@ int create_udp_socket(void) { return socket(AF_INET, SOCK_DGRAM, 0); }
 int connect2(const int sockno, const unsigned short portno, const int ipaddr,
              struct sockaddr_in *p) {
   init_sockaddr_in(portno, ipaddr, p);
-  return connect(sockno, (struct sockaddr *)p, sizeof(*p));
+  return do_connect(sockno, (struct sockaddr *)p, sizeof(*p));
 }
 
 /**
@@ -38,7 +38,7 @@ int bind2(const int sockno, const unsigned short portno, const int ipaddr) {
   struct sockaddr_in inaddr;
 
   init_sockaddr_in(portno, ipaddr, &inaddr);
-  return bind(sockno, (struct sockaddr *)&inaddr, sizeof(inaddr));
+  return do_bind(sockno, (struct sockaddr *)&inaddr, sizeof(inaddr));
 }
 
 /**

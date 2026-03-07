@@ -3,5 +3,6 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include "joynetd.h"
 
 #define n2a_ipaddr(addr, dst) inet_ntoa((struct in_addr){htonl(addr)})

@@ -36,11 +36,12 @@ ASFLAGS = -I. -MMD -MP
 LDFLAGS =
 LDFLAGS += -Wl,-Map,$(@:.x=.map) -specs=nano.specs
 
-INC +=
+INC += -I.
 DEFS +=
 
 TARGET = joynetd.x
 OBJS += head.o joynetd.o inetconfig.o inetcmd.o inetiface.o inetdns.o inetroute.o inetetc.o w5500.o
+OBJS += idhcpc/idhcpc.o
 OBJS += idhcpc/dhcp.o
 OBJS += idhcpc/nwsub.o
 LIBS += -lsocket

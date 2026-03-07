@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/dos.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -13,20 +12,12 @@
 #include "mynetwork.h"
 #include "nwsub.h"
 
-#define MAGIC_FORMAT "%s idhcpc https://github.com/68fpjc"
-
 typedef struct {
   int s; /* 送信用 UDP ソケット識別子 */
   int r; /* 受信用 UDP ソケット識別子 */
 } udpsockets;
 
 static int initialize(const char *);
-static struct _psp *getpdb(void);
-static struct _mep *getmep(void);
-static void *getkeepst(void);
-static int offsetof_idhcpcinfo(void);
-static int getmagicoffset(void);
-static int getkeepsize(void);
 static udpsockets create_sockets(void);
 static errno prepare_iface(const char *, iface **, dhcp_hw_addr *);
 static errno prepare_discover(iface *, udpsockets *, struct sockaddr_in *);
@@ -51,29 +42,7 @@ static void fill_dhcp_hw_addr(const iface *, dhcp_hw_addr *);
 static void msleep(const int);
 
 idhcpcinfo *g_pidhcpcinfo; /* initialize() で初期化される */
-
-/**
- * @brief 常駐サイズ計算用のダミー関数
- */
-static void keeped(void) {}
-
-/**
- * @brief 常駐終了
- * @param ifname インタフェース名
- */
-void keeppr_and_exit(void) { _dos_keeppr(getkeepsize(), 0); }
-
-/**
- * @brief 常駐解除
- * @param ifname インタフェース名
- * @return 0: 成功
- * @remark 常駐していない場合は何もしない
- */
-int freepr(const char *ifname) {
-  return initialize(ifname)
-             ? _dos_mfree((void *)((int)g_pidhcpcinfo - sizeof(struct _psp)))
-             : -1;
-}
+idhcpcinfo g_idhcpcinfo = {0};
 
 /**
  * @brief 常駐処理
@@ -99,12 +68,13 @@ errno try_to_keep(const int verbose, const char *ifname) {
 
       g_pidhcpcinfo->startat = time(NULL); /* 起動日時 */
 
+      (void)(
       (!0) &&
           ((err = prepare_discover(piface, &sockets, &inaddr_s)) == NOERROR) &&
           ((err = discover_dhcp_server(verbose, &hwaddr, &sockets, &me, &server,
                                        &inaddr_s)) == NOERROR) &&
           ((err = request_to_dhcp_server(verbose, &hwaddr, &sockets, me, server,
-                                         &inaddr_s, piface)) == NOERROR);
+                                         &inaddr_s, piface)) == NOERROR));
       close_sockets(&sockets);
     }
   }
@@ -180,83 +150,11 @@ static int initialize(const char *ifname) {
 
     /* インタフェース名を現プロセスのワークへコピーしておく */
     strncpy(g_idhcpcinfo.ifname, ifname, sizeof(g_idhcpcinfo.ifname));
-    /* 常駐チェック用文字列を生成して現プロセスのワークへコピーしておく */
-    snprintf(g_idhcpcinfo.magic, sizeof(g_idhcpcinfo.magic), MAGIC_FORMAT,
-             g_idhcpcinfo.ifname);
-    {
-      extern int _keepchk(const struct _mep *, const size_t, struct _mep **);
-
-      struct _mep *pmep;
-
-      kept = _keepchk(getmep(), getmagicoffset(), &pmep);
-
-      g_pidhcpcinfo = /* 常駐している場合は常駐プロセスへのポインタ、そうでない場合は現プロセスへのポインタをセットする
-                       */
-          (idhcpcinfo *)((int)pmep + sizeof(struct _mep) + sizeof(struct _psp) +
-                         offsetof_idhcpcinfo());
-    }
+    g_pidhcpcinfo = &g_idhcpcinfo;
     initialized = 1;
   }
   return kept;
 }
-
-/**
- * @brief DOS _GETPDB の結果を返す
- * @return DOS _GETPDB の結果
- */
-static struct _psp *getpdb(void) {
-  static struct _psp *ppsp = NULL;
-  if (ppsp == NULL) {
-    ppsp = _dos_getpdb();
-  }
-  return ppsp;
-}
-
-/**
- * @brief 現プロセスのメモリ管理ポインタを返す
- * @return 現プロセスのメモリ管理ポインタ
- */
-static struct _mep *getmep(void) {
-  static struct _mep *pmep = NULL;
-  if (pmep == NULL) {
-    pmep = (struct _mep *)((int)getpdb() - sizeof(struct _mep));
-  }
-  return pmep;
-}
-
-/**
- * @brief 現在のプログラム先頭アドレスを返す
- * @return 現在のプログラム先頭アドレス
- */
-static void *getkeepst(void) {
-  return (void *)((int)getpdb() + sizeof(struct _psp));
-}
-
-/**
- * @brief プログラム先頭から idhcpc ワーク先頭までのオフセットを返す
- * @return オフセット
- */
-static int offsetof_idhcpcinfo(void) {
-  extern idhcpcinfo g_idhcpcinfo; /* idhcpc ワーク */
-
-  return (int)&g_idhcpcinfo - (int)getkeepst();
-}
-
-/**
- * @brief プログラム先頭から識別用文字列までのオフセットを返す
- * @return プログラム先頭から識別用文字列までのオフセット
- */
-static int getmagicoffset(void) {
-  extern idhcpcinfo g_idhcpcinfo; /* idhcpc ワーク */
-
-  return (int)&g_idhcpcinfo.magic - (int)&g_idhcpcinfo;
-}
-
-/**
- * @brief 常駐サイズを返す
- * @return 常駐サイズ
- */
-static int getkeepsize(void) { return (int)&keeped - (int)getkeepst(); }
 
 /**
  * @brief udpsockets 構造体の初期値を返す
@@ -278,13 +176,10 @@ static udpsockets create_sockets(void) {
  */
 static errno prepare_iface(const char *ifname, iface **ppiface,
                            dhcp_hw_addr *phwaddr) {
-  if (_get_version() < 0) {
-    return ERR_NODEVICE;
-  }
   {
     iface *p;
 
-    if ((p = get_new_iface((char *)ifname)) == NULL) {
+    if ((p = do_get_new_iface((char *)ifname)) == NULL) {
       return ERR_NOIFACE;
     }
     *ppiface = p;
@@ -450,7 +345,7 @@ static errno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
       printf("DHCP サーバポート (67) へ送信中 ...\n");
       fflush(stdout);
     }
-    sendto(psockets->s, (char *)&smsg, sizeof(smsg), 0, (char *)pinaddr_s,
+    do_sendto(psockets->s, (char *)&smsg, sizeof(smsg), 0, (struct sockaddr *)pinaddr_s,
            sizeof(*pinaddr_s));
     /* while (socklen(g_sock_s, 1)) ;*/ /* 送信完了待ち */
 
@@ -468,7 +363,7 @@ static errno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
       int interval = 500;
 
       do {
-        if (!socklen(psockets->r, 0)) {
+        if (do_socklen(psockets->r, 0)) {
           if (verbose) { /* インチキプログレス表示 */
             printf(".");
             fflush(stdout);
@@ -480,9 +375,9 @@ static errno send_and_receive(const int verbose, const dhcp_hw_addr *phwaddr,
           continue;
         }
         {
-          int len = sizeof(inaddr_r);
-          recvfrom(psockets->r, (char *)prmsg, sizeof(*prmsg), 0,
-                   (char *)&inaddr_r, &len);
+          socklen_t len = sizeof(inaddr_r);
+          do_recvfrom(psockets->r, (char *)prmsg, sizeof(*prmsg), 0,
+                   (struct sockaddr *)&inaddr_r, &len);
         }
         if (!dhcp_isreply(prmsg, xid, &msgtype_r)) continue;
         if (msgtype_s == DHCPDISCOVER) {
@@ -589,7 +484,7 @@ static errno release_config(const int verbose, iface *piface,
     printf("DHCP サーバポート (67) へ送信中 ...\n");
     fflush(stdout);
   }
-  sendto(psockets->s, (char *)&msg, sizeof(msg), 0, (char *)&inaddr_s,
+  do_sendto(psockets->s, (char *)&msg, sizeof(msg), 0, (struct sockaddr *)&inaddr_s,
          sizeof(inaddr_s));
   msleep(500); /* 少し待つ */
   iface_when_release(piface);
@@ -603,11 +498,11 @@ static errno release_config(const int verbose, iface *piface,
  */
 static void close_sockets(udpsockets *psockets) {
   if (psockets->s != -1) {
-    close_s(psockets->s);
+    do_close(psockets->s);
     psockets->s = -1;
   }
   if (psockets->r != -1) {
-    close_s(psockets->r);
+    do_close(psockets->r);
     psockets->r = -1;
   }
 }
@@ -620,7 +515,7 @@ static void iface_when_discover(iface *piface) {
   piface->my_ip_addr = 0;
   piface->broad_cast = DHCP_LIMITEDBCAST;
   piface->flag |= IFACE_UP | IFACE_BROAD;
-  link_new_iface(piface);
+  do_link_new_iface(piface);
 }
 
 /**
@@ -635,20 +530,20 @@ static void iface_when_request(const unsigned long subnetmask,
   piface->net_mask = subnetmask;
   piface->broad_cast = (piface->my_ip_addr & subnetmask) | ~subnetmask;
   piface->flag |= IFACE_UP;
-  link_new_iface(piface);
+  do_link_new_iface(piface);
   {
     unsigned long *p = g_pidhcpcinfo->dns, addr;
 
     while ((addr = *p++)) {
-      dns_add((long)addr);
+      do_dns_add((long)addr);
     }
   }
   if (strcmp(domainname, "")) {
-    set_domain_name((char *)domainname);
+    do_set_domain_name((char *)domainname);
   }
   if (g_pidhcpcinfo->gateway) {
     route *def;
-    rt_top(&def);
+    do_rt_top(&def);
     def->gateway = (long)g_pidhcpcinfo->gateway;
   }
   /* msleep(1500);*/
@@ -663,13 +558,13 @@ static void iface_when_release(iface *piface) {
     unsigned long *p = g_pidhcpcinfo->dns, addr;
 
     while ((addr = *p++)) {
-      dns_drop((long)addr);
+      do_dns_drop((long)addr);
     }
   }
-  set_domain_name("");
+  do_set_domain_name("");
   if (g_pidhcpcinfo->gateway) {
     route *def;
-    rt_top(&def);
+    do_rt_top(&def);
     def->gateway = 0;
   }
   {
@@ -680,7 +575,7 @@ static void iface_when_release(iface *piface) {
     piface->net_mask = 0;
     piface->broad_cast = 0;
     piface->flag &= ~(IFACE_UP | IFACE_BROAD);
-    link_new_iface(piface);
+    do_link_new_iface(piface);
   }
 }
 
