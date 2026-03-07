@@ -104,6 +104,8 @@ struct rrec {
   char *r_data;			/* pointer to data */
 };
 
+#if 0 /* avoid duplicate definition */
+
 struct hostent
 {
   char *h_name;
@@ -135,6 +137,8 @@ struct servent {
   int s_port;
   char *s_proto;
 };
+
+#endif
 
 /* mib section */
 struct mib_entry
@@ -171,6 +175,8 @@ typedef struct route
 } route;
 
 typedef route *rtable[32][NROUTE];
+
+#if 0 /* avoid duplicate definition */
 
 /* functions */
 long _get_version (void);
@@ -236,4 +242,7 @@ enum {
 };
 
 int rip_set (int);
+
+#endif
+
 #endif

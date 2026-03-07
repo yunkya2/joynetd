@@ -44,56 +44,6 @@
 // Macros and definitions
 //****************************************************************************
 
-#define MAX_HW_ADDR_LEN     (16)
-
-#define IFACE_UP            (1)
-#define IFACE_RUNNING       (2)
-#define IFACE_NOARP         (4)
-#define IFACE_NOTRAIL       (8)
-#define IFACE_BROAD         (16)
-#define IFACE_LOOPBACK      (32)
-#define IFACE_PTP           (64)
-
-typedef struct iface {
-  struct iface *next;
-  char *name;
-
-  int (*config) (struct iface *);
-  int (*stop) (struct iface *);
-  int (*update) (struct iface *);
-  int (*send) (struct iface *, void *, long, int, int, int, int);
-  int (*output) (struct iface *, char *, char *, long, void *);
-  void (*input) (struct iface *, void *);
-  int (*fprint) (FILE *, char *);
-  int (*sprint) (char *, char *);
-  int (*fscan) (FILE *, char *);
-  int (*sscan) (char *, char *);
-
-  int mtu;
-  long my_ip_addr;
-  long net_mask;
-  long broad_cast;
-  short arp_type;
-  short arp_ip_type;
-  short arp_hw_type;
-  int hw_addr_len;
-  unsigned char my_hw_addr[MAX_HW_ADDR_LEN];
-  unsigned char my_hw_broad_addr[MAX_HW_ADDR_LEN];
-
-  struct iface *forw;
-  int flag;
-  long ipsndcnt;
-  long rawsndcnt;
-  long snderrcnt;
-  long iprcvcnt;
-  long rawrcvcnt;
-  long rcverrcnt;
-  long collcnt;
-  long lastsent;
-
-  long data;
-} iface;
-
 static int iface_stop(struct iface *);
 static int iface_dummy(struct iface *);
 

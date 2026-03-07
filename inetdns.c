@@ -42,14 +42,6 @@
 // Macros and definitions
 //****************************************************************************
 
-struct dns
-{
-  struct dns *prev;
-  struct dns *next;
-
-  long address;
-};
-
 #define DNS_PORT 53
 #define MAX_RESPONSE_SIZE 512
 #define DNS_CACHE_MAX_ENTRIES 8
@@ -198,8 +190,6 @@ static struct dns_cache_entry *find_dns_cache(char *dname, int class, int type)
 //****************************************************************************
 // Public functions
 //****************************************************************************
-
-struct dns;
 
 int do_dns_add(long ipaddr)
 {

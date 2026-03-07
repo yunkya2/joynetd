@@ -43,25 +43,6 @@
 // Macros and definitions
 //****************************************************************************
 
-#define NROUTE 5
-
-typedef struct route
-{
-  struct route *prev;
-  struct route *next;
-  long target;
-  unsigned int bits;
-  long gateway;
-  long metric;
-  struct iface *iface;
-  int flags;
-  int ttl;
-  int _ttl;
-  long uses;
-} route;
-
-typedef route *rtable[32][NROUTE];
-
 //****************************************************************************
 // Global variables
 //****************************************************************************

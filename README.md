@@ -250,5 +250,6 @@ joynetd.x のソースコードには、(株) 計測技研 が開発したフリ
 http://retropc.net/x68000/software/internet/kg/tcppackb/
 にて無償配布されている「TCP/IPドライバ無償配布パッケージ(B PACK)」に含まれる以下のソースコードを使用しています。
 - tcpipdrv.h
+- network.h
 
 その他の、作者が新たに作成したソースコードは MIT ライセンスとします。

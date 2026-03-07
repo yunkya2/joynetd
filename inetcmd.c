@@ -99,11 +99,7 @@ typedef struct usock
 #define ARPSIZE 17
 void *dummy_arp_table[ARPSIZE];
 
-struct {
-    void *entry;
-    int size;
-    const char *name;
-} dummy_mib_array[4] = {
+struct mib_array dummy_mib_array[4] = {
     { NULL, 0, "IP" },
     { NULL, 0, "ICMP" },
     { NULL, 0, "UDP" },

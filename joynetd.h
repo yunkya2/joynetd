@@ -37,6 +37,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include "network.h"
 #include "w5500.h"
 
 #define IFNAME "en0"
