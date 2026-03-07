@@ -210,7 +210,7 @@ static void help(void)
         "  -c       設定ファイルを生成する\n"
         "  -f       設定ファイルのパスを指定する\n"
         "  -p|-j    使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n"
-        "  -t       APIのtrap番号 (0～7/-1(auto)/-2(none)) (default: -1)\n"
+        "  -t       APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i       使用するネットワークインターフェース名 (default: en0)\n"
     );
     exit(1);
