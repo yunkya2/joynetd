@@ -106,7 +106,7 @@ void read_config(void)
         while (fgets(line, sizeof(line), fp) != NULL) {
             if (strncasecmp(line, "port=", 5) == 0) {
                 v = atoi(&line[5]);
-                if (v >= 1 && v <= 2) {
+                if (v <= 2) {
                     joy_port = v;
                 }
             } else if (strncasecmp(line, "trap=", 5) == 0) {

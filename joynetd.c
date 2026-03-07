@@ -53,9 +53,10 @@ struct joynetd_data {
     int vectno;
     void *oldvect;
     void *oldvect_joy;
+    int joyport;
 };
 
-#define JOYNET_MAGIC    0x4a4f5901  // "JOY\1"
+#define JOYNET_MAGIC    0x4a4f5902  // "JOY\2"
 
 //****************************************************************************
 // Global variables
@@ -71,9 +72,10 @@ extern void *joyget_org;
 struct joynetd_data joynetd_data = {
     .magic = JOYNET_MAGIC,
     .vectno = 0,
+    .joyport = -1,
 };
 
-int joy_port = 1;
+int joy_port = -1;
 int trap_number = -2;
 char *ifname = IFNAME;
 bool ifenable = false;
@@ -138,7 +140,7 @@ void help(void)
 {
     printf("使用法: joynetd [-r] [-p|-j<port number>] [-t<trap number>] [-i<interface name>]\n");
     printf("  -r       常駐解除\n");
-    printf("  -p|-j    使用するジョイスティックポート番号 (1 or 2) (default: 1)\n");
+    printf("  -p|-j    使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n");
     printf("  -t       APIのtrap番号 (0～7/-1/-2) (default: -1(auto))\n");
     printf("  -i       使用するネットワークインターフェース名 (default: en0)\n");
     exit(1);
@@ -160,7 +162,7 @@ int main(int argc, char **argv)
             case 'p':
             case 'j':
                 v = atoi(&argv[i][2]);
-                if (v < 1 || v > 2) {
+                if (v > 2) {
                     help();
                 }
                 joy_port = v;
@@ -185,10 +187,6 @@ int main(int argc, char **argv)
         }
     }
 
-    w5500_select(joy_port);
-    joyget_stat = 0x4b00 + joy_port;
-    joyget_port = joy_port - 1;
-
     _dos_super(0);
 
     if (opt_r) {
@@ -203,6 +201,8 @@ int main(int argc, char **argv)
             _dos_print("常駐している joynetd のバージョンが異なります\r\n");
             return 1;
         }
+
+        w5500_select(data->joyport);
 
         w5500_ini();
         w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
@@ -230,10 +230,22 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    if (joy_port < 1) {
+        // ジョイポート 1,2 の順でW5500が接続されているか確認する
+        joy_port = 1;
+        w5500_select(joy_port);
+        w5500_ini();
+        w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
+        if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
+            joy_port = 2;
+        }
+        w5500_fin();
+    }
+
+    w5500_select(joy_port);
     w5500_ini();
 
     w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
-
     if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
         _dos_print("イーサネットじょい君が接続されていません\r\n");
         w5500_fin();
@@ -245,6 +257,9 @@ int main(int argc, char **argv)
     set_ifenable(ifenable);
 
     w5500_fin();
+
+    joyget_stat = 0x4b00 + joy_port;
+    joyget_port = joy_port - 1;
 
     if (trap_number < -1) {    // 未使用のtrap番号を探す
         for (trap_number = 0; trap_number < 8; trap_number++) {
@@ -269,6 +284,7 @@ int main(int argc, char **argv)
 
     joynetd_data.memblock = _dos_getpdb();
     joynetd_data.oldvect_joy = _dos_intvcs(0x013b, joyget);
+    joynetd_data.joyport = joy_port;
     joyget_org = joynetd_data.oldvect_joy;
 
     prev = find_devheader(NULL);
