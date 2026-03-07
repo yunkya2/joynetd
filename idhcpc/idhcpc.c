@@ -50,7 +50,7 @@ idhcpcinfo g_idhcpcinfo = {0};
  * @param ifname インタフェース名
  * @return エラーコード
  */
-errno try_to_keep(const int verbose, const char *ifname) {
+errno idhcp_request(const int verbose, const char *ifname) {
   errno err;
 
   if (initialize(ifname)) {
@@ -87,7 +87,7 @@ errno try_to_keep(const int verbose, const char *ifname) {
  * @param ifname インタフェース名
  * @return エラーコード
  */
-errno try_to_release(const int verbose, const char *ifname) {
+errno idhcp_release(const int verbose, const char *ifname) {
   errno err;
 
   if (!initialize(ifname)) {
@@ -118,7 +118,7 @@ errno try_to_release(const int verbose, const char *ifname) {
  * @param[out] pleasetime 残りリース期間格納域. 無期限の場合は -1 が格納される
  * @return エラーコード
  */
-errno get_remaining(const char *ifname, const int force, int *pleasetime) {
+errno idhcp_get_remaining(const char *ifname, const int force, int *pleasetime) {
   errno err;
 
   if (!initialize(ifname) && !force) {

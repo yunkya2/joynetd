@@ -36,8 +36,8 @@ typedef struct {
   char ifname[8];                 /* インタフェース名 */
 } idhcpcinfo;
 
-errno try_to_keep(const int, const char *);
-errno try_to_release(const int, const char *);
-errno get_remaining(const char *, const int, int *);
+errno idhcp_request(const int, const char *);
+errno idhcp_release(const int, const char *);
+errno idhcp_get_remaining(const char *, const int, int *);
 
 #endif /* IDHCPC_H */
