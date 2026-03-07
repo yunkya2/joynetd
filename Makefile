@@ -41,6 +41,8 @@ DEFS +=
 
 TARGET = joynetd.x
 OBJS += head.o joynetd.o inetconfig.o inetcmd.o inetiface.o inetdns.o inetroute.o inetetc.o w5500.o
+OBJS += idhcpc/dhcp.o
+OBJS += idhcpc/nwsub.o
 LIBS += -lsocket
 
 all: $(TARGET)

@@ -24,7 +24,7 @@ int create_udp_socket(void) { return socket(AF_INET, SOCK_DGRAM, 0); }
 int connect2(const int sockno, const unsigned short portno, const int ipaddr,
              struct sockaddr_in *p) {
   init_sockaddr_in(portno, ipaddr, p);
-  return connect(sockno, (char *)p, sizeof(*p));
+  return connect(sockno, (struct sockaddr *)p, sizeof(*p));
 }
 
 /**
@@ -38,7 +38,7 @@ int bind2(const int sockno, const unsigned short portno, const int ipaddr) {
   struct sockaddr_in inaddr;
 
   init_sockaddr_in(portno, ipaddr, &inaddr);
-  return bind(sockno, (char *)&inaddr, sizeof(inaddr));
+  return bind(sockno, (struct sockaddr *)&inaddr, sizeof(inaddr));
 }
 
 /**
@@ -51,6 +51,6 @@ void init_sockaddr_in(const unsigned short portno, const int ipaddr,
                       struct sockaddr_in *p) {
   memset(p, 0, sizeof(*p)); /* 0 で埋めておく */
   p->sin_family = AF_INET;
-  p->sin_port = portno;
-  p->sin_addr.s_addr = ipaddr;
+  p->sin_port = htons(portno);
+  p->sin_addr.s_addr = htonl(ipaddr);
 }

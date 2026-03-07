@@ -189,7 +189,7 @@ unsigned char *dhcp_searchfromopt(const dhcp_msg *pmsg,
     p += 1 + *p;
   }
 
-  return (char *)p;
+  return (unsigned char *)p;
 }
 
 /**
@@ -423,14 +423,14 @@ void dhcp_print(const dhcp_msg *pmsg) {
                n2a_ipaddr((long)IPADDR(p[0], p[1], p[2], p[3]), buf));
         break;
       case DHCP_HOSTNAME:
-        strncpy(buf, p, msglen);
+        strncpy((char *)buf, (char *)p, msglen);
         printf("\t%02d (DHCP_HOSTNAME): %s\n", DHCP_HOSTNAME, buf);
         break;
       case DHCP_BOOTSIZE:
         printf("\t%02d (DHCP_BOOTSIZE): %s\n", DHCP_BOOTSIZE, "");
         break;
       case DHCP_DOMAINNAME:
-        strncpy(buf, p, msglen);
+        strncpy((char *)buf, (char *)p, msglen);
         printf("\t%02d (DHCP_DOMAINNAME): %s\n", DHCP_DOMAINNAME, buf);
         break;
       case DHCP_REQIPADDR:

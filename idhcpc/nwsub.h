@@ -3,7 +3,9 @@
 #ifndef NWSUB_H
 #define NWSUB_H
 
-#include <socket.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 int create_udp_socket(void);
 int connect2(const int, const unsigned short, const int, struct sockaddr_in *);

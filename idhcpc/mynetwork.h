@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: 0BSD */
 
 #include <stdio.h>
-/* network.h の前に stdio.h が必要 */
-#include <network.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
+#define n2a_ipaddr(addr, dst) inet_ntoa((struct in_addr){htonl(addr)})
