@@ -356,14 +356,18 @@ int main(int argc, char **argv)
     set_config();
     set_ifenable(ifenable);
 
+    int dhcp_result = -1;
     if (dhcp_mode) {
         _dos_print("ネットワーク設定をDHCPで取得しています...\r\n");
-        if (idhcp_request(opt_v, ifname) != 0) {
+        dhcp_result = idhcp_request(opt_v, ifname);
+        if (dhcp_result != NOERROR) {
             _dos_print("DHCPリースの取得に失敗しました\r\n");
         } else {
             _dos_print("DHCPリースの取得に成功しました\r\n");
         }
     }
+
+    show_config(dhcp_result == NOERROR ? -1 : 0);
 
     w5500_fin();
 

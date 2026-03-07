@@ -136,5 +136,6 @@ void fini_etc_files(void);
 int read_config(const char *cfgfile);
 int create_config(const char *cfgfile);
 void set_config(void);
+void show_config(int mask);
 
 #endif /* _JOYNETD_H_ */

@@ -264,38 +264,8 @@ void set_config(void)
         printf("※ joynetd.cfg にMACアドレスの指定がないため、ランダムなアドレスを生成します\n");
         generate_random_mac();
     }
-    printf("MAC addr: %s\n", mactoa(w5500_mac));
-    if (config_flags & FLAG_IP) {
-        printf("IP addr : %s\n", inet_ntoa(*(struct in_addr *)&w5500_sipr.a));
-    }
-    if (config_flags & FLAG_MASK) {
-        printf("Netmask : %s\n", inet_ntoa(*(struct in_addr *)&w5500_subr.a));
-    }
-    if (config_flags & FLAG_GW) {
-        printf("Gateway : %s\n", inet_ntoa(*(struct in_addr *)&w5500_gar.a));
-    }
-    if (config_flags & FLAG_DNS) {
-        printf("DNS     : %s\n", inet_ntoa(*(struct in_addr *)&w5500_dns.a));
-    }
-    if (config_flags & FLAG_DOMAIN) {
-        char *domain = do_get_domain_name();
-        printf("Domain  : %s\n", domain[0] ? domain : "(none)");
-    }
-
-#ifdef DEBUG
-    for (int i = 0; i < 0x40; i += 0x10) {
-        uint8_t data[16];
-        w5500_read(i, 0, data, 16);
-        for (int j = 0; j < 16; j++) {
-            PRINTF(" %02x", data[j]);
-        }
-        PRINTF("\n");
-    }
-    PRINTF("\n");
-#endif
 
     // Configure W5500 network settings
-
     w5500_write(W5500_SHAR, 0, w5500_mac, 6);
     if (config_flags & FLAG_IP) {
         w5500_write_l(W5500_SIPR, 0, w5500_sipr.a);
@@ -311,4 +281,66 @@ void set_config(void)
     }
 
     ifenable = (config_flags & (FLAG_IP|FLAG_MASK|FLAG_GW|FLAG_DNS)) == (FLAG_IP|FLAG_MASK|FLAG_GW|FLAG_DNS);
+}
+
+void show_config(int mask)
+{
+    char buf[80];
+
+    config_flags |= mask;
+
+    w5500_read(W5500_SHAR, 0, w5500_mac, 6);
+    w5500_sipr.a = w5500_read_l(W5500_SIPR, 0);
+    w5500_subr.a = w5500_read_l(W5500_SUBR, 0);
+    w5500_gar.a = w5500_read_l(W5500_GAR, 0);
+
+    struct dns *dns;
+    dns = do_dns_get();
+    if (dns) {
+        w5500_dns.a = htonl(dns->address);
+    } else {
+        w5500_dns.a = 0;
+    }
+
+    printf("Interface : %s\t\t\tMAC addr: %s\n", ifname, mactoa(w5500_mac));
+    if (config_flags & FLAG_IP) {
+        sprintf(buf, "IP addr : %s", inet_ntoa(*(struct in_addr *)&w5500_sipr.a));
+        printf("%-32s", buf);
+    }
+    if (config_flags & FLAG_MASK) {
+        sprintf(buf, "Netmask : %s", inet_ntoa(*(struct in_addr *)&w5500_subr.a));
+        printf("%-32s", buf);
+    }
+    if (config_flags & (FLAG_IP|FLAG_MASK)) {
+        printf("\n");
+    }
+    if (config_flags & FLAG_GW) {
+        sprintf(buf, "Gateway : %s", inet_ntoa(*(struct in_addr *)&w5500_gar.a));
+        printf("%-32s", buf);
+    }
+    if (config_flags & FLAG_DNS) {
+        sprintf(buf, "DNS     : %s", inet_ntoa(*(struct in_addr *)&w5500_dns.a));
+        printf("%-32s", buf);
+    }
+    if (config_flags & (FLAG_GW|FLAG_DNS)) {
+        printf("\n");
+    }
+    if (config_flags & FLAG_DOMAIN) {
+        char *domain = do_get_domain_name();
+        if (domain && domain[0]) {
+            printf("Domain  : %s\n", domain);
+        }
+    }
+
+#ifdef DEBUG
+    for (int i = 0; i < 0x40; i += 0x10) {
+        uint8_t data[16];
+        w5500_read(i, 0, data, 16);
+        for (int j = 0; j < 16; j++) {
+            PRINTF(" %02x", data[j]);
+        }
+        PRINTF("\n");
+    }
+    PRINTF("\n");
+#endif
 }
