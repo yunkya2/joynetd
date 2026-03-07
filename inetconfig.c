@@ -66,6 +66,15 @@ static uint8_t w5500_mac[6];
 
 static int config_flags = 0;
 
+extern const char joynetd_cfg_tmpl[];
+
+__asm__ (
+    ".section .rodata\n"
+    "joynetd_cfg_tmpl:\n"
+    ".incbin \"joynetd.cfg.tmpl.txt\"\n"
+    ".previous\n"
+);
+
 //****************************************************************************
 // Private functions
 //****************************************************************************
@@ -87,97 +96,150 @@ static void generate_random_mac(void)
     }
 }
 
-void read_config(void)
+static char *mactoa(const uint8_t *mac)
 {
-    FILE *fp;
-    char cfgname[256];
+    static char buf[18];
+    sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return buf;
+}
+
+static char *get_default_cfgfile(char *buf)
+{
+    // Use default config file path based on executable path
     struct dos_psp *psp = _dos_getpdb();
+    strcpy(buf, psp->exe_path);
+    strcat(buf, "joynetd.cfg");
+    return buf;
+}
+
+//****************************************************************************
+// Public functions
+//****************************************************************************
+
+int read_config(const char *cfgfile)
+{
+    char cfgdefault[256];
+    FILE *fp;
+
+    if (cfgfile == NULL) {
+        cfgfile = get_default_cfgfile(cfgdefault);
+    }
+
+    if ((fp = fopen(cfgfile, "r")) == NULL) {
+        _dos_print("設定ファイルが見つかりません\r\n"
+                   "joynetd -c で設定ファイルを生成してください\r\n");
+        return -1;
+    }
+
+    // Read config file line by line
+    int v;
+    char line[256];
+    char *p;
+    char *q;
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strncasecmp(line, "port=", 5) == 0) {
+            v = atoi(&line[5]);
+            if (v <= 2) {
+                joy_port = v;
+            }
+        } else if (strncasecmp(line, "trap=", 5) == 0) {
+            v = atoi(&line[5]);
+            if (v < 8) {
+                trap_number = v;
+            }
+        } else if (strncasecmp(line, "ifname=", 7) == 0) {
+            char *n = &line[7];
+            size_t len = strlen(n);
+            if (len > 0 && n[len - 1] == '\n') {
+                n[len - 1] = '\0';
+                ifname = malloc(len + 1);
+                if (ifname) {
+                    strcpy(ifname, n);
+                }
+            }
+        } else if (strncasecmp(line, "mac=", 4) == 0) {
+            p = &line[4];
+            for (int i = 0; i < 6; i++) {
+                w5500_mac[i] = strtoul(p, &q, 16);
+                p = q + 1;
+            }
+            config_flags |= FLAG_MAC;
+        } else if (strncasecmp(line, "ip=", 3) == 0) {
+            p = &line[3];
+            for (int i = 0; i < 4; i++) {
+                w5500_sipr.b[i] = strtoul(p, &q, 0);
+                p = q + 1;
+            }
+            config_flags |= FLAG_IP;
+        } else if (strncasecmp(line, "mask=", 5) == 0) {
+            p = &line[5];
+            for (int i = 0; i < 4; i++) {
+                w5500_subr.b[i] = strtoul(p, &q, 0);
+                p = q + 1;
+            }
+            config_flags |= FLAG_MASK;
+        } else if (strncasecmp(line, "gw=", 3) == 0) {
+            p = &line[3];
+            for (int i = 0; i < 4; i++) {
+                w5500_gar.b[i] = strtoul(p, &q, 0);
+                p = q + 1;
+            }
+            config_flags |= FLAG_GW;
+        } else if (strncasecmp(line, "dns=", 4) == 0) {
+            p = &line[4];
+            for (int i = 0; i < 4; i++) {
+                w5500_dns.b[i] = strtoul(p, &q, 0);
+                p = q + 1;
+            }
+            config_flags |= FLAG_DNS;
+        } else if (strncasecmp(line, "domain=", 7) == 0) {
+            do_set_domain_name(&line[7]);
+            config_flags |= FLAG_DOMAIN;
+        }
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+int create_config(const char *cfgfile)
+{
+    char cfgdefault[256];
+    FILE *fp;
 
     // Generate default random MAC address
     generate_random_mac();
 
-    strcpy(cfgname, psp->exe_path);
-    strcat(cfgname, "joynetd.cfg");
-    if ((fp = fopen(cfgname, "r")) != NULL) {
-        int v;
-        char line[256];
-        char *p;
-        char *q;
-        while (fgets(line, sizeof(line), fp) != NULL) {
-            if (strncasecmp(line, "port=", 5) == 0) {
-                v = atoi(&line[5]);
-                if (v <= 2) {
-                    joy_port = v;
-                }
-            } else if (strncasecmp(line, "trap=", 5) == 0) {
-                v = atoi(&line[5]);
-                if (v < 8) {
-                    trap_number = v;
-                }
-            } else if (strncasecmp(line, "ifname=", 7) == 0) {
-                char *n = &line[7];
-                size_t len = strlen(n);
-                if (len > 0 && n[len - 1] == '\n') {
-                    n[len - 1] = '\0';
-                    ifname = malloc(len + 1);
-                    if (ifname) {
-                        strcpy(ifname, n);
-                    }
-                }
-            } else if (strncasecmp(line, "mac=", 4) == 0) {
-                p = &line[4];
-                for (int i = 0; i < 6; i++) {
-                    w5500_mac[i] = strtoul(p, &q, 16);
-                    p = q + 1;
-                }
-                config_flags |= FLAG_MAC;
-            } else if (strncasecmp(line, "ip=", 3) == 0) {
-                p = &line[3];
-                for (int i = 0; i < 4; i++) {
-                    w5500_sipr.b[i] = strtoul(p, &q, 0);
-                    p = q + 1;
-                }
-                config_flags |= FLAG_IP;
-            } else if (strncasecmp(line, "mask=", 5) == 0) {
-                p = &line[5];
-                for (int i = 0; i < 4; i++) {
-                    w5500_subr.b[i] = strtoul(p, &q, 0);
-                    p = q + 1;
-                }
-                config_flags |= FLAG_MASK;
-            } else if (strncasecmp(line, "gw=", 3) == 0) {
-                p = &line[3];
-                for (int i = 0; i < 4; i++) {
-                    w5500_gar.b[i] = strtoul(p, &q, 0);
-                    p = q + 1;
-                }
-                config_flags |= FLAG_GW;
-            } else if (strncasecmp(line, "dns=", 4) == 0) {
-                p = &line[4];
-                for (int i = 0; i < 4; i++) {
-                    w5500_dns.b[i] = strtoul(p, &q, 0);
-                    p = q + 1;
-                }
-                config_flags |= FLAG_DNS;
-            } else if (strncasecmp(line, "domain=", 7) == 0) {
-                do_set_domain_name(&line[7]);
-                config_flags |= FLAG_DOMAIN;
-            }
-        }
+    if (cfgfile == NULL) {
+        cfgfile = get_default_cfgfile(cfgdefault);
+    }
+
+    if ((fp = fopen(cfgfile, "r")) != NULL) {
+        _dos_print("設定ファイルが既に存在します\r\n");
+        fclose(fp);
+        return -1;
+    }
+
+    // Create default config file with random MAC address
+    if ((fp = fopen(cfgfile, "w")) == NULL) {
+        _dos_print("設定ファイルの生成に失敗しました\r\n");
+        return -1;
+    } else {
+        fprintf(fp, joynetd_cfg_tmpl, mactoa(w5500_mac));
         fclose(fp);
     }
+    _dos_print("設定ファイルを生成しました\r\n");
+    return 0;
 }
 
 void set_config(void)
 {
     if (!(config_flags & FLAG_MAC)) {
-        printf("※ joynetd.cfg にMACアドレスの指定がないため、ランダムMACアドレスを使用します\n");
+        printf("※ joynetd.cfg にMACアドレスの指定がないため、ランダムなアドレスを生成します\n");
+        generate_random_mac();
     }
-    printf("MAC addr: ");
-    for (int i = 0; i < 6; i++) {
-        printf("%02x%s", w5500_mac[i], i < 5 ? ":" : "");
-    }
-    printf("\n");
+    printf("MAC addr: %s\n", mactoa(w5500_mac));
     if (config_flags & FLAG_IP) {
         printf("IP addr : %s\n", inet_ntoa(*(struct in_addr *)&w5500_sipr.a));
     }

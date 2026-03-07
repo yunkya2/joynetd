@@ -109,7 +109,8 @@ int init_etc_files(void);
 void fini_etc_files(void);
 
 // inetconfig.c
-void read_config(void);
+int read_config(const char *cfgfile);
+int create_config(const char *cfgfile);
 void set_config(void);
 
 #endif /* _JOYNETD_H_ */

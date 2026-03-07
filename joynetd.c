@@ -78,9 +78,11 @@ struct joynetd_data joynetd_data = {
 int joy_port = -1;
 int trap_number = -2;
 char *ifname = IFNAME;
+char *cfgfile = NULL;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
+static bool opt_c = false;  // -c option
 
 //****************************************************************************
 // Private functions
@@ -132,64 +134,111 @@ int set_ifenable(bool enable)
     return 0;
 }
 
+
+static int get_arg_opt(char **opt, int index, int argc, char **argv)
+{
+    if (argv[index][2] != '\0') {
+        *opt = &argv[index][2];
+        return index;
+    } else if (index + 1 < argc) {
+        *opt = argv[index + 1];
+        return index + 1;
+    } else {
+        return -1;
+    }
+}
+
+static int parse_cmdline(int argc, char **argv)
+{
+    int v;
+    char *p;
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' || argv[i][0] == '/') {
+            switch (argv[i][1]) {
+            case 'f':
+                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                cfgfile = p;
+                break;
+            case 'r':
+                opt_r = true;
+                break;
+            case 'c':
+                opt_c = true;
+                break;
+            case 'p':
+            case 'j':
+                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                v = atoi(p);
+                if (v > 2) {
+                    return -1;
+                }
+                joy_port = v;
+                break;
+            case 't':
+                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                v = atoi(p);
+                if (v > 7) {
+                    return -1;
+                }
+                trap_number = v;
+                break;
+            case 'i':
+                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                ifname = p;
+                break;
+            default:
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void help(void)
+{
+    printf(
+        "使用法: joynetd [-r][-c] [-f<config file>] [-p|-j<port number>] [-t<trap number>] [-i<interface name>]\n"
+        "  -r       常駐解除\n"
+        "  -c       設定ファイルを生成する\n"
+        "  -f       設定ファイルのパスを指定する\n"
+        "  -p|-j    使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n"
+        "  -t       APIのtrap番号 (0～7/-1(auto)/-2(none)) (default: -1)\n"
+        "  -i       使用するネットワークインターフェース名 (default: en0)\n"
+    );
+    exit(1);
+}
+
 //****************************************************************************
 // Program entry
 //****************************************************************************
-
-void help(void)
-{
-    printf("使用法: joynetd [-r] [-p|-j<port number>] [-t<trap number>] [-i<interface name>]\n");
-    printf("  -r       常駐解除\n");
-    printf("  -p|-j    使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n");
-    printf("  -t       APIのtrap番号 (0～7/-1/-2) (default: -1(auto))\n");
-    printf("  -i       使用するネットワークインターフェース名 (default: en0)\n");
-    exit(1);
-}
 
 int main(int argc, char **argv)
 {
     _dos_print("X680x0 Ethernet Joy-kun Network driver (version " GIT_REPO_VERSION ")\r\n");
 
-    read_config();
+    if (parse_cmdline(argc, argv) < 0) {
+        help();
+    }
 
-    int v;
-    for (int i = 1; i < argc; i++) {
-        if (argv[i][0] == '-' || argv[i][0] == '/') {
-            switch (argv[i][1]) {
-            case 'r':
-                opt_r = true;
-                break;
-            case 'p':
-            case 'j':
-                v = atoi(&argv[i][2]);
-                if (v > 2) {
-                    help();
-                }
-                joy_port = v;
-                break;
-            case 't':
-                v = atoi(&argv[i][2]);
-                if (v > 7) {
-                    help();
-                }
-                trap_number = v;
-                break;
-            case 'i':
-                if (strlen(&argv[i][2]) == 0) {
-                    help();
-                }
-                ifname = &argv[i][2];
-                break;
-            default:
-                help();
-                return 1;
-            }
+    if (opt_c) {
+        if (create_config(cfgfile) < 0) {
+            return 1;
         }
     }
 
-    _dos_super(0);
+    // 常駐解除処理
 
     if (opt_r) {
+        _dos_super(0);
+
         struct dos_devheader *prev = find_devheader("/joynet/");
         if (prev == NULL) {
             _dos_print("joynetd は常駐していません\r\n");
@@ -218,7 +267,15 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    //////////////////////////////////////////////////////////////////////////
+    // 常駐処理
+
+    _dos_super(0);
+
+    if (read_config(cfgfile) < 0) {
+        return 1;
+    }
+
+    parse_cmdline(argc, argv);  // 設定をコマンドライン引数で上書き
 
     struct dos_devheader *prev = find_devheader("/joynet/");
     if (prev != NULL) {

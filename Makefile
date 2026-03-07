@@ -43,7 +43,7 @@ TARGET = joynetd.x
 OBJS += head.o joynetd.o inetconfig.o inetcmd.o inetiface.o inetdns.o inetroute.o inetetc.o w5500.o
 LIBS += -lsocket
 
-all: $(TARGET) joynetd.cfg
+all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) -nostartfiles
@@ -56,15 +56,17 @@ $(TARGET): $(OBJS)
 
 DEPS = $(OBJS:.o=.d)
 
-joynetd.cfg: joynetd.cfg.tmpl
-	iconv -f utf-8 -t cp932 $^ | sed 's/$$/\r/' > $@
+inetconfig.o: joynetd.cfg.tmpl.txt
+
+joynetd.cfg.tmpl.txt: joynetd.cfg.tmpl
+	iconv -f utf-8 -t cp932 $^ > $@
 
 clean:
-	-rm -f $(OBJS) $(DEPS) *.x *.elf* *.map *.d *.o joynetd.cfg README.txt
+	-rm -f $(OBJS) $(DEPS) *.x *.elf* *.map *.d *.o joynetd.cfg joynetd.cfg.tmpl.txt README.txt
 
 release: clean all
 	./md2txtconv.py README.md
-	zip -r joynetd-$(GIT_REPO_VERSION) README.txt joynetd.x joynetd.cfg
+	zip -r joynetd-$(GIT_REPO_VERSION) README.txt joynetd.x
 
 -include $(DEPS)
 
