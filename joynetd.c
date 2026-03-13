@@ -227,13 +227,13 @@ static int parse_cmdline(int argc, char **argv)
 static void help(void)
 {
     printf(
-        "使用法: joynetd [オプション]\n"
+        "使用法: joynetd [-j<port number>] [オプション]\n"
         "オプション:\n"
+        "  -j<port number>    使用するジョイスティックポート番号 (1 or 2)\n"
         "  -r                 常駐解除\n"
         "  -c                 設定ファイルを生成する\n"
         "  -v                 詳細表示\n"
         "  -f<config file>    設定ファイルのパスを指定する\n"
-        "  -p|-j<port number> 使用するジョイスティックポート番号 (0(auto)/1/2) (default: 0)\n"
         "  -t<trap number>    APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
         "  -d<dhcp mode>      DHCP使用モード (0:使用しない / 1:使用する) (default: 1)\n"
@@ -255,6 +255,10 @@ int main(int argc, char **argv)
     }
 
     if (opt_c) {
+        if (joy_port == NOSPEC_INT) {
+            _dos_print("-j オプションでジョイスティックポート番号を指定してください\r\n");
+            return 1;
+        }
         if (create_config(cfgfile) < 0) {
             return 1;
         }
@@ -295,12 +299,7 @@ int main(int argc, char **argv)
 
     // 常駐処理
 
-    _dos_super(0);
-
     // コマンドラインで指定されなかった設定のデフォルト値を設定する
-    if (joy_port == NOSPEC_INT) {
-        joy_port = DEFAULT_PORT;
-    }
     if (trap_number == NOSPEC_INT) {
         trap_number = DEFAULT_TRAP;
     }
@@ -319,6 +318,13 @@ int main(int argc, char **argv)
     }
 
     parse_cmdline(argc, argv);  // 設定をコマンドライン引数で上書き
+
+    if (joy_port == NOSPEC_INT) {
+        _dos_print("-j オプションでジョイスティックポート番号を指定してください\r\n");
+        return 1;
+    }
+
+    _dos_super(0);
 
     struct dos_devheader *prev = find_devheader("/joynet/");
     if (prev != NULL) {
@@ -347,7 +353,7 @@ int main(int argc, char **argv)
 
     w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
     if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
-        _dos_print("イーサネットじょい君が接続されていません\r\n");
+        printf("ポート %d にイーサネットじょい君が接続されていません\n", joy_port);
         w5500_fin();
         return 1;
     }
