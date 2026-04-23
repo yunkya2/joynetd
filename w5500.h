@@ -68,6 +68,22 @@ void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len);
 #define W5500_PHYCFGR       0x002e  // PHY Configuration
 #define W5500_VERSIONR      0x0039  // Chip Version
 
+// PHY Configuration bits (W5500_PHYCFGR)
+#define W5500_PHYCFGR_RST               0x80
+#define W5500_PHYCFGR_OPMD              0x40
+#define W5500_PHYCFGR_OPMDC_MASK        0x38
+#define W5500_PHYCFGR_DPX               0x04
+#define W5500_PHYCFGR_SPD               0x02
+#define W5500_PHYCFGR_LNK               0x01
+
+#define W5500_PHYCFGR_OPMDC_10H         0x00
+#define W5500_PHYCFGR_OPMDC_10F         0x08
+#define W5500_PHYCFGR_OPMDC_100H        0x10
+#define W5500_PHYCFGR_OPMDC_100F        0x18
+#define W5500_PHYCFGR_OPMDC_100H_AN     0x20
+#define W5500_PHYCFGR_OPMDC_POWER_DOWN  0x30
+#define W5500_PHYCFGR_OPMDC_ALL_AN      0x38
+
 #define W5500_Sn_MR         0x0000  // Socket n Mode
 #define W5500_Sn_CR         0x0001  // Socket n Command
 #define W5500_Sn_IR         0x0002  // Socket n Interrupt

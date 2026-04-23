@@ -26,8 +26,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
@@ -58,6 +60,10 @@ struct joynetd_data {
 
 #define JOYNET_MAGIC    0x4a4f5902  // "JOY\2"
 
+#define W5500_PHY_RESET_WAIT_US  1000
+#define W5500_PHY_POLL_WAIT_US  10000
+#define W5500_LINK_WAIT_MS      1500
+
 //****************************************************************************
 // Global variables
 //****************************************************************************
@@ -86,6 +92,7 @@ bool ifenable = false;
 static bool opt_r = false;  // -r option
 static bool opt_c = false;  // -c option
 static bool opt_v = false;  // -v option
+static int forced_phy_mode = -1;  // -m option (-1: use hardware PMODE)
 
 //****************************************************************************
 // Private functions
@@ -137,6 +144,137 @@ int set_ifenable(bool enable)
     return 0;
 }
 
+static inline unsigned int duration_msec(struct iocs_time *t0)
+{
+    struct iocs_time now = _iocs_ontime();
+
+    return ((now.sec - t0->sec) +
+            (now.day - t0->day) * 24 * 60 * 60 * 100) * 10;
+}
+
+static const char *w5500_phy_mode_name(uint8_t phycfgr)
+{
+    switch (phycfgr & W5500_PHYCFGR_OPMDC_MASK) {
+    case W5500_PHYCFGR_OPMDC_10H:
+        return "10H";
+    case W5500_PHYCFGR_OPMDC_10F:
+        return "10F";
+    case W5500_PHYCFGR_OPMDC_100H:
+        return "100H";
+    case W5500_PHYCFGR_OPMDC_100F:
+        return "100F";
+    case W5500_PHYCFGR_OPMDC_100H_AN:
+        return "100H_AN";
+    case W5500_PHYCFGR_OPMDC_POWER_DOWN:
+        return "POWER_DOWN";
+    case W5500_PHYCFGR_OPMDC_ALL_AN:
+        return "ALL_AN";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+static bool strieq(const char *a, const char *b)
+{
+    while (*a && *b) {
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
+            return false;
+        }
+        a++;
+        b++;
+    }
+    return *a == 0 && *b == 0;
+}
+
+static int parse_phy_mode(const char *mode)
+{
+    if (strieq(mode, "auto") ||
+        strieq(mode, "all_an") ||
+        strieq(mode, "an")) {
+        return W5500_PHYCFGR_OPMDC_ALL_AN;
+    }
+    if (strieq(mode, "10h") ||
+        strieq(mode, "10half") ||
+        strieq(mode, "10-half")) {
+        return W5500_PHYCFGR_OPMDC_10H;
+    }
+    if (strieq(mode, "10f") ||
+        strieq(mode, "10full") ||
+        strieq(mode, "10-full")) {
+        return W5500_PHYCFGR_OPMDC_10F;
+    }
+    if (strieq(mode, "100h") ||
+        strieq(mode, "100half") ||
+        strieq(mode, "100-half")) {
+        return W5500_PHYCFGR_OPMDC_100H;
+    }
+    if (strieq(mode, "100f") ||
+        strieq(mode, "100full") ||
+        strieq(mode, "100-full")) {
+        return W5500_PHYCFGR_OPMDC_100F;
+    }
+    if (strieq(mode, "100h_an") ||
+        strieq(mode, "100h-an")) {
+        return W5500_PHYCFGR_OPMDC_100H_AN;
+    }
+    if (strieq(mode, "pdown") ||
+        strieq(mode, "power_down") ||
+        strieq(mode, "power-down")) {
+        return W5500_PHYCFGR_OPMDC_POWER_DOWN;
+    }
+    return -1;
+}
+
+static void dump_phycfgr(const char *label)
+{
+    uint8_t phycfgr = w5500_read_b(W5500_PHYCFGR, 0);
+
+    printf("%s PHYCFGR=0x%02x (%s cfg=%s, mode=%s, link=%s, speed=%s, duplex=%s)\n",
+           label,
+           phycfgr,
+           (phycfgr & W5500_PHYCFGR_OPMD) ? "sw" : "hw",
+           w5500_phy_mode_name(phycfgr),
+           (phycfgr & W5500_PHYCFGR_OPMD) ? "PHYCFGR" : "PMODE",
+           (phycfgr & W5500_PHYCFGR_LNK) ? "up" : "down",
+           (phycfgr & W5500_PHYCFGR_SPD) ? "100M" : "10M",
+           (phycfgr & W5500_PHYCFGR_DPX) ? "full" : "half");
+}
+
+static void maybe_dump_phycfgr(const char *label)
+{
+    if (opt_v) {
+        dump_phycfgr(label);
+    }
+}
+
+static void w5500_apply_forced_phy_mode(void)
+{
+    if (forced_phy_mode >= 0) {
+        uint8_t phycfgr = W5500_PHYCFGR_OPMD |
+                          (forced_phy_mode & W5500_PHYCFGR_OPMDC_MASK);
+
+        w5500_write_b(W5500_PHYCFGR, 0, phycfgr & ~W5500_PHYCFGR_RST);
+        usleep(W5500_PHY_RESET_WAIT_US);
+        w5500_write_b(W5500_PHYCFGR, 0, phycfgr | W5500_PHYCFGR_RST);
+        usleep(W5500_PHY_RESET_WAIT_US);
+
+        printf("Startup PHY mode override applied: %s\n",
+               w5500_phy_mode_name(phycfgr));
+    }
+}
+
+static bool w5500_wait_for_link(unsigned int timeout_ms)
+{
+    struct iocs_time t0 = _iocs_ontime();
+
+    while (duration_msec(&t0) < timeout_ms) {
+        if (w5500_read_b(W5500_PHYCFGR, 0) & W5500_PHYCFGR_LNK) {
+            return true;
+        }
+        usleep(W5500_PHY_POLL_WAIT_US);
+    }
+    return false;
+}
 
 static int get_arg_opt(char **opt, int index, int argc, char **argv)
 {
@@ -172,6 +310,16 @@ static int parse_cmdline(int argc, char **argv)
                 break;
             case 'v':
                 opt_v = true;
+                break;
+            case 'm':
+                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                v = parse_phy_mode(p);
+                if (v < 0) {
+                    return -1;
+                }
+                forced_phy_mode = v;
                 break;
             case 'p':
             case 'j':
@@ -233,6 +381,7 @@ static void help(void)
         "  -r                 常駐解除\n"
         "  -c                 設定ファイルを生成する\n"
         "  -v                 詳細表示\n"
+        "  -m<phy mode>       PHYモード強制 (auto/10h/10f/100h/100f/100h_an/pdown)\n"
         "  -f<config file>    設定ファイルのパスを指定する\n"
         "  -t<trap number>    APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
@@ -285,6 +434,7 @@ int main(int argc, char **argv)
 
         w5500_ini();
         w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
+        usleep(W5500_PHY_RESET_WAIT_US);
         w5500_fin();
 
         if (data->vectno != 0) {
@@ -342,6 +492,7 @@ int main(int argc, char **argv)
         w5500_select(joy_port);
         w5500_ini();
         w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
+        usleep(W5500_PHY_RESET_WAIT_US);
         if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
             joy_port = 2;
         }
@@ -352,10 +503,22 @@ int main(int argc, char **argv)
     w5500_ini();
 
     w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
+    usleep(W5500_PHY_RESET_WAIT_US);
     if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
         printf("ポート %d にイーサネットじょい君が接続されていません\n", joy_port);
         w5500_fin();
         return 1;
+    }
+
+    maybe_dump_phycfgr("Startup:");
+    w5500_apply_forced_phy_mode();
+    maybe_dump_phycfgr("After PHY setup:");
+
+    if (!w5500_wait_for_link(W5500_LINK_WAIT_MS)) {
+        printf("Warning: Ethernet link is still down after startup wait\n");
+        dump_phycfgr("Link wait:");
+    } else {
+        maybe_dump_phycfgr("Link ready:");
     }
 
     init_etc_files();
