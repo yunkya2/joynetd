@@ -40,6 +40,7 @@
 #define SPI_MOSI    0x01
 #define SPI_CLK     0x02
 #define SPI_CS      0x04
+#define SPI_DISABLE 0x08
 
 // 8255 parameter structure for Port A/B
 
@@ -55,8 +56,8 @@ struct w5500_param {
 
 // 8255 port control macro
 
-#define W5500_CS_ENB()  do { *(volatile uint8_t *)joyport->port_a = SPI_MOSI | SPI_CLK | 0; } while(0)
-#define W5500_CS_DIS()  do { *(volatile uint8_t *)joyport->port_a = SPI_MOSI | SPI_CLK | SPI_CS; } while(0)
+#define W5500_CS_ENB()  do { *(volatile uint8_t *)joyport->port_a = SPI_MOSI | SPI_CLK; } while(0)
+#define W5500_CS_DIS()  do { *(volatile uint8_t *)joyport->port_a = SPI_MOSI | SPI_CLK | SPI_CS | SPI_DISABLE; } while(0)
 
 //****************************************************************************
 // Global variables
