@@ -171,6 +171,16 @@ int read_config(const char *cfgfile)
                     strcpy(hostname, n);
                 }
             }
+        } else if (strncasecmp(line, "phymode=", 8) == 0) {
+            char *n = &line[8];
+            size_t len = strlen(n);
+            if (len > 0 && n[len - 1] == '\n') {
+                n[len - 1] = '\0';
+                phymode = malloc(len + 1);
+                if (phymode) {
+                    strcpy(phymode, n);
+                }
+            }
         } else if (strncasecmp(line, "mac=", 4) == 0) {
             p = &line[4];
             for (int i = 0; i < 6; i++) {
@@ -250,7 +260,9 @@ int create_config(const char *cfgfile)
                 dhcp_mode == NOSPEC_INT ? ";" : "",
                 dhcp_mode == NOSPEC_INT ? DEFAULT_DHCP : dhcp_mode,
                 hostname == NOSPEC_STR ? ";" : "",
-                hostname == NOSPEC_STR ? "" : hostname
+                hostname == NOSPEC_STR ? "" : hostname,
+                phymode == NOSPEC_STR ? ";" : "",
+                phymode == NOSPEC_STR ? DEFAULT_PHYMODE : phymode
         );
         fclose(fp);
     }

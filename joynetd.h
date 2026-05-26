@@ -49,6 +49,7 @@
 #define DEFAULT_IFNAME      "en0"
 #define DEFAULT_DHCP        1
 #define DEFAULT_HOSTNAME    NULL
+#define DEFAULT_PHYMODE     "auto"
 
 // joynetd.c
 extern int joy_port;
@@ -56,6 +57,7 @@ extern int trap_number;
 extern char *ifname;
 extern int dhcp_mode;
 extern char *hostname;
+extern char *phymode;
 extern bool ifenable;
 int set_ifenable(bool enable);
 

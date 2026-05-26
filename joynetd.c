@@ -26,7 +26,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -60,9 +59,9 @@ struct joynetd_data {
 
 #define JOYNET_MAGIC    0x4a4f5902  // "JOY\2"
 
-#define W5500_PHY_RESET_WAIT_US  1000
-#define W5500_PHY_POLL_WAIT_US  10000
-#define W5500_LINK_WAIT_MS      1500
+#define W5500_PHY_RESET_WAIT_US     1000
+#define W5500_PHY_POLL_WAIT_US      10000
+#define W5500_LINK_WAIT_MS          3000
 
 //****************************************************************************
 // Global variables
@@ -87,12 +86,13 @@ int trap_number = NOSPEC_INT;
 char *ifname = NOSPEC_STR;
 int dhcp_mode = NOSPEC_INT;
 char *hostname = NOSPEC_STR;
+char *phymode = NOSPEC_STR;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
 static bool opt_c = false;  // -c option
 static bool opt_v = false;  // -v option
-static int forced_phy_mode = -1;  // -m option (-1: use hardware PMODE)
+static int phymode_val = -1;    // -m option
 
 //****************************************************************************
 // Private functions
@@ -138,20 +138,6 @@ static void *find_tcpip(void)
     return NULL;
 }
 
-int set_ifenable(bool enable)
-{
-    ifenable = enable;
-    return 0;
-}
-
-static inline unsigned int duration_msec(struct iocs_time *t0)
-{
-    struct iocs_time now = _iocs_ontime();
-
-    return ((now.sec - t0->sec) +
-            (now.day - t0->day) * 24 * 60 * 60 * 100) * 10;
-}
-
 static const char *w5500_phy_mode_name(uint8_t phycfgr)
 {
     switch (phycfgr & W5500_PHYCFGR_OPMDC_MASK) {
@@ -174,63 +160,33 @@ static const char *w5500_phy_mode_name(uint8_t phycfgr)
     }
 }
 
-static bool strieq(const char *a, const char *b)
-{
-    while (*a && *b) {
-        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
-            return false;
-        }
-        a++;
-        b++;
-    }
-    return *a == 0 && *b == 0;
-}
-
 static int parse_phy_mode(const char *mode)
 {
-    if (strieq(mode, "auto") ||
-        strieq(mode, "all_an") ||
-        strieq(mode, "an")) {
+    if (mode == NULL || strcasecmp(mode, "auto") == 0) {
         return W5500_PHYCFGR_OPMDC_ALL_AN;
-    }
-    if (strieq(mode, "10h") ||
-        strieq(mode, "10half") ||
-        strieq(mode, "10-half")) {
+    } else if (strcasecmp(mode, "10h") == 0) {
         return W5500_PHYCFGR_OPMDC_10H;
-    }
-    if (strieq(mode, "10f") ||
-        strieq(mode, "10full") ||
-        strieq(mode, "10-full")) {
+    } else if (strcasecmp(mode, "10f") == 0) {
         return W5500_PHYCFGR_OPMDC_10F;
-    }
-    if (strieq(mode, "100h") ||
-        strieq(mode, "100half") ||
-        strieq(mode, "100-half")) {
+    } else if (strcasecmp(mode, "100h") == 0) {
         return W5500_PHYCFGR_OPMDC_100H;
-    }
-    if (strieq(mode, "100f") ||
-        strieq(mode, "100full") ||
-        strieq(mode, "100-full")) {
+    } else if (strcasecmp(mode, "100f") == 0) {
         return W5500_PHYCFGR_OPMDC_100F;
-    }
-    if (strieq(mode, "100h_an") ||
-        strieq(mode, "100h-an")) {
+    } else if (strcasecmp(mode, "100h_an") == 0) {
         return W5500_PHYCFGR_OPMDC_100H_AN;
-    }
-    if (strieq(mode, "pdown") ||
-        strieq(mode, "power_down") ||
-        strieq(mode, "power-down")) {
-        return W5500_PHYCFGR_OPMDC_POWER_DOWN;
     }
     return -1;
 }
 
-static void dump_phycfgr(const char *label)
+static void dump_phycfgr(void)
 {
+    if (!opt_v) {
+        return;
+    }
+
     uint8_t phycfgr = w5500_read_b(W5500_PHYCFGR, 0);
 
-    printf("%s PHYCFGR=0x%02x (%s cfg=%s, mode=%s, link=%s, speed=%s, duplex=%s)\n",
-           label,
+    printf("PHYCFGR=0x%02x (%s cfg=%s, mode=%s, link=%s, speed=%s, duplex=%s)\n",
            phycfgr,
            (phycfgr & W5500_PHYCFGR_OPMD) ? "sw" : "hw",
            w5500_phy_mode_name(phycfgr),
@@ -240,40 +196,33 @@ static void dump_phycfgr(const char *label)
            (phycfgr & W5500_PHYCFGR_DPX) ? "full" : "half");
 }
 
-static void maybe_dump_phycfgr(const char *label)
+static void w5500_apply_phymode(int mode)
 {
-    if (opt_v) {
-        dump_phycfgr(label);
-    }
-}
-
-static void w5500_apply_forced_phy_mode(void)
-{
-    if (forced_phy_mode >= 0) {
-        uint8_t phycfgr = W5500_PHYCFGR_OPMD |
-                          (forced_phy_mode & W5500_PHYCFGR_OPMDC_MASK);
-
-        w5500_write_b(W5500_PHYCFGR, 0, phycfgr & ~W5500_PHYCFGR_RST);
-        usleep(W5500_PHY_RESET_WAIT_US);
-        w5500_write_b(W5500_PHYCFGR, 0, phycfgr | W5500_PHYCFGR_RST);
-        usleep(W5500_PHY_RESET_WAIT_US);
-
-        printf("Startup PHY mode override applied: %s\n",
-               w5500_phy_mode_name(phycfgr));
-    }
+    uint8_t phycfgr = W5500_PHYCFGR_OPMD | (mode & W5500_PHYCFGR_OPMDC_MASK);
+    w5500_write_b(W5500_PHYCFGR, 0, phycfgr & ~W5500_PHYCFGR_RST);
+    usleep(W5500_PHY_RESET_WAIT_US);
+    w5500_write_b(W5500_PHYCFGR, 0, phycfgr | W5500_PHYCFGR_RST);
+    usleep(W5500_PHY_RESET_WAIT_US);
 }
 
 static bool w5500_wait_for_link(unsigned int timeout_ms)
 {
-    struct iocs_time t0 = _iocs_ontime();
+    unsigned int elapsed_ms = 0;
 
-    while (duration_msec(&t0) < timeout_ms) {
+    while (elapsed_ms < timeout_ms) {
         if (w5500_read_b(W5500_PHYCFGR, 0) & W5500_PHYCFGR_LNK) {
             return true;
         }
         usleep(W5500_PHY_POLL_WAIT_US);
+        elapsed_ms += W5500_PHY_POLL_WAIT_US / 1000;
     }
     return false;
+}
+
+int set_ifenable(bool enable)
+{
+    ifenable = enable;
+    return 0;
 }
 
 static int get_arg_opt(char **opt, int index, int argc, char **argv)
@@ -315,11 +264,7 @@ static int parse_cmdline(int argc, char **argv)
                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
                     return -1;
                 }
-                v = parse_phy_mode(p);
-                if (v < 0) {
-                    return -1;
-                }
-                forced_phy_mode = v;
+                phymode = p;
                 break;
             case 'p':
             case 'j':
@@ -381,12 +326,12 @@ static void help(void)
         "  -r                 常駐解除\n"
         "  -c                 設定ファイルを生成する\n"
         "  -v                 詳細表示\n"
-        "  -m<phy mode>       PHYモード強制 (auto/10h/10f/100h/100f/100h_an/pdown)\n"
         "  -f<config file>    設定ファイルのパスを指定する\n"
         "  -t<trap number>    APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
         "  -d<dhcp mode>      DHCP使用モード (0:使用しない / 1:使用する) (default: 1)\n"
         "  -h<host name>      DHCP使用時のホスト名 (default: なし)\n"
+        "  -m<phy mode>       PHY接続モード指定 (auto(default)/10h/10f/100h/100f/100h_an)\n"
     );
     exit(1);
 }
@@ -406,6 +351,10 @@ int main(int argc, char **argv)
     if (opt_c) {
         if (joy_port == NOSPEC_INT) {
             _dos_print("-j オプションでジョイスティックポート番号を指定してください\r\n");
+            return 1;
+        }
+        if ((phymode_val = parse_phy_mode(phymode)) < 0) {
+            _dos_print("PHY接続モードの指定が不正です\r\n");
             return 1;
         }
         if (create_config(cfgfile) < 0) {
@@ -462,6 +411,9 @@ int main(int argc, char **argv)
     if (hostname == NOSPEC_STR) {
         hostname = DEFAULT_HOSTNAME;
     }
+    if (phymode == NOSPEC_STR) {
+        phymode = DEFAULT_PHYMODE;
+    }
 
     if (read_config(cfgfile) < 0) {
         return 1;
@@ -471,6 +423,11 @@ int main(int argc, char **argv)
 
     if (joy_port == NOSPEC_INT) {
         _dos_print("-j オプションでジョイスティックポート番号を指定してください\r\n");
+        return 1;
+    }
+    phymode_val = parse_phy_mode(phymode);
+    if (phymode_val < 0) {
+        _dos_print("PHY接続モードの指定が不正です\r\n");
         return 1;
     }
 
@@ -510,16 +467,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    maybe_dump_phycfgr("Startup:");
-    w5500_apply_forced_phy_mode();
-    maybe_dump_phycfgr("After PHY setup:");
-
+    dump_phycfgr();
+    w5500_apply_phymode(phymode_val);
     if (!w5500_wait_for_link(W5500_LINK_WAIT_MS)) {
-        printf("Warning: Ethernet link is still down after startup wait\n");
-        dump_phycfgr("Link wait:");
-    } else {
-        maybe_dump_phycfgr("Link ready:");
+        printf("LANケーブルが接続されていません\n");
     }
+    dump_phycfgr();
 
     init_etc_files();
     set_config();
