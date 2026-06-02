@@ -442,11 +442,11 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
             PRINTF("joynetd: addr or addrlen is NULL or too small\n");
             errno = EINVAL;
             return -1;
-        } else if (u->noblock && stat == W5500_Sn_SR_LISTEN) {
+        } else if (u->noblock && (stat == W5500_Sn_SR_LISTEN || stat == W5500_Sn_SR_SYNRECV)) {
             errno = EAGAIN;
             return -1;
         }
-    } while (stat == W5500_Sn_SR_LISTEN);
+    } while (stat == W5500_Sn_SR_LISTEN || stat == W5500_Sn_SR_SYNRECV);
     PRINTF("accept failed, Sn_SR=%02x\n", stat);
     errno = ECONNABORTED;
     return -1;
