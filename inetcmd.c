@@ -165,7 +165,8 @@ static int validate_sockfd(int sockfd, int type)
     case SOCKFD_SOCKET:
         if (sockfd >= SOCKCLNT_BASE && sockfd < SOCKCLNT_BASE + W5500_N_SOCKETS) {
             sockfd -= SOCKCLNT_BASE;
-            if (usock_array[sockfd].type == NOTUSED) {
+            if (usock_array[sockfd].type == NOTUSED &&
+                (usock_accepted & (1 << sockfd)) == 0) {     // accept()で作られたsocketも未使用
                 PRINTF("joynetd: unused sockfd %d\r\n", sockfd + SOCKCLNT_BASE);
                 errno = EBADF;
                 return -1;
@@ -186,7 +187,8 @@ static int validate_sockfd(int sockfd, int type)
     case SOCKFD_RDWR:
         if (sockfd >= SOCKCLNT_BASE && sockfd < SOCKCLNT_BASE + W5500_N_SOCKETS) {
             sockfd -= SOCKCLNT_BASE;
-            if (usock_array[sockfd].type == NOTUSED) {
+            if (usock_array[sockfd].type == NOTUSED &&
+                (usock_accepted & (1 << sockfd)) == 0) {     // accept()で作られたsocketも未使用
                 PRINTF("joynetd: unused sockfd %d\r\n", sockfd + SOCKCLNT_BASE);
                 errno = EBADF;
                 return -1;
@@ -252,8 +254,8 @@ int do_socket(int domain, int type, int protocol)
 
     for (int i = 0; i < W5500_N_SOCKETS; i++) {
         usock *u = &usock_array[i];
-        if (u->type == NOTUSED) {
-
+        if (u->type == NOTUSED &&
+            (usock_accepted & (1 << i)) == 0) {     // accept()で作られたsocketも未使用
             // ポート番号を適当に決める
             int port;
             while (1) {
@@ -437,6 +439,7 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
                 strcpy(uc->eol, u->eol);
                 usock_accepted |= (1 << sno);
 
+                PRINTF("accept succeeded, new sockfd=%d\n", sno + SOCKCLNT_BASE);
                 return SOCKCLNT_BASE + sno;
             }
             PRINTF("joynetd: addr or addrlen is NULL or too small\n");
@@ -726,6 +729,14 @@ int do_close(int sockfd)
         do_rt_lookup(0);    // workaround for idhcpc.x
     }
 
+    if (sockfd < SOCKBASE + W5500_N_SOCKETS && (usock_accepted & (1 << sno))) {
+        // listen()中のfdがaccept()で生成されたfdより先にclose()された場合
+        // W5550のsocketはaccept()後の接続で使用中なので、内部状態のみ未使用に変更する
+        usock_listening &= ~(1 << sno);
+        u->type = NOTUSED;
+        return 0;
+    }
+
     if (w5500_read_b(W5500_Sn_SR, blk_sreg) == W5500_Sn_SR_ESTABLISHED) {
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_DISCON);
         if (wait_status(blk_sreg, W5500_Sn_SR_CLOSED) < 0) {
@@ -746,12 +757,14 @@ int do_close(int sockfd)
             PRINTF("socket close timeout\n");
             return do_close(sockfd - SOCKCLNT_BASE + SOCKBASE);
         }
-        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_OPEN);
-        if (wait_status(blk_sreg, W5500_Sn_SR_INIT) < 0) {
-            PRINTF("socket reopen timeout\n");
-            return do_close(sockfd - SOCKCLNT_BASE + SOCKBASE);
+        if (usock_listening & (1 << sno)) {
+            w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_OPEN);
+            if (wait_status(blk_sreg, W5500_Sn_SR_INIT) < 0) {
+                PRINTF("socket reopen timeout\n");
+                return do_close(sockfd - SOCKCLNT_BASE + SOCKBASE);
+            }
+            w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
         }
-        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_LISTEN);
     } else {
         usock_listening &= ~(1 << sno);
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
