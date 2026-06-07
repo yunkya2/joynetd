@@ -30,7 +30,7 @@ RANLIB = $(CROSS)ranlib
 
 GIT_REPO_VERSION=$(shell git describe --tags --always)
 
-WIFICONFIG ?= ../.wificonfig.cmake
+WIFICONFIG ?= ../wificonfig.txt
 ifneq ($(wildcard $(WIFICONFIG)),)
 include $(WIFICONFIG)
 endif
