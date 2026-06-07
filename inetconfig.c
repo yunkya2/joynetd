@@ -141,6 +141,14 @@ int read_config(const char *cfgfile)
             size_t len = strlen(n);
             if (len > 0 && n[len - 1] == '\n') {
                 n[len - 1] = '\0';
+                // ssid="..." の形式なら引用符内だけを使う
+                if (n[0] == '"') {
+                    char *end = strrchr(n + 1, '"');
+                    if (end != NULL) {
+                        *end = '\0';
+                        n = n + 1;
+                    }
+                }
                 strncpy(wifi_ssid, n, 32);
                 wifi_ssid[32] = '\0';
             }

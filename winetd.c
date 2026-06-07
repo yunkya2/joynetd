@@ -220,18 +220,19 @@ static int parse_cmdline(int argc, char **argv)
                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
                     return -1;
                 }
-                char *sep = strchr(p, '%');
-                int ssid_len = sep ? (sep - p) : strlen(p);
-                ssid_len = ssid_len > 32 ? 32 : ssid_len;
-                strncpy(wifi_ssid, p, ssid_len);
-                wifi_ssid[ssid_len] = '\0';
-                wifi_passwd[0] = '\0';
-                if (sep) {
-                    char *passwd = sep + 1;
-                    int passwd_len = strlen(passwd);
-                    passwd_len = passwd_len > 64 ? 64 : passwd_len;
-                    strncpy(wifi_passwd, passwd, passwd_len);
-                    wifi_passwd[passwd_len] = '\0';
+                {
+                    strncpy(wifi_ssid, p, 32);
+                    wifi_ssid[32] = '\0';
+
+                    if (i + 1 >= argc) {
+                        return -1;
+                    }
+
+                    char *passwd = argv[i + 1];
+                    strncpy(wifi_passwd, passwd, 64);
+                    wifi_passwd[64] = '\0';
+
+                    i++;    // パスワード引数を消費
                 }
                 break;
              case 'd':
@@ -267,7 +268,7 @@ static void help(void)
         "  -f<config file>    設定ファイルのパスを指定する\n"
         "  -t<trap number>    APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
-        "  -s<ssid>[%%<pass>]  接続するWiFiのSSIDとパスワード (default: 自動接続しない)\n"
+        "  -s <ssid> <pass>   接続するWiFiのSSIDとパスワード (default: 接続しない)\n"
         "  -d<dhcp mode>      DHCP使用モード (0:使用しない / 1:使用する) (default: 1)\n"
         "  -h<host name>      DHCP使用時のホスト名 (default: なし)\n"
     );
