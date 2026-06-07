@@ -433,10 +433,13 @@ int main(int argc, char **argv)
         _dos_print(wifi_ssid);
         _dos_print(" に接続しています...");
 
-        if (wifi_connect(true) >= 0) {
-            do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
-            show_config(-1);
+        if (wifi_connect(true) < 0) {
+            // WiFi接続設定があるのに接続できない場合は常駐しない
+            w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
+            return 1;
         }
+        do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
+        show_config(-1);
     } else {
         _dos_print("WiFi SSIDが設定されていません\r\n");
     }
