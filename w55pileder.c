@@ -77,7 +77,7 @@ char *w5500_ini(void)
 
     w5500_read(W5500_WIDENT, 0, w5500_version, 8);
     w5500_version[8] = '\0';
-    if (strcmp((char *)w5500_version, WIFI_IDENT) != 0) {
+    if (memcmp((char *)w5500_version, WIFI_IDENT, 4) != 0) {
         return NULL;    // WiFi pilederが存在しない
     }
 
@@ -143,12 +143,12 @@ void w5500_read(uint16_t addr, uint8_t block, uint8_t *data, size_t len)
         "addi.w  #16,%%d0\n"
         "bra.s   4f\n"
 
-        "3:\n"      // (12+10)*16 = 352 cycles/16 bytes = 22 cycles/byte
-        "move.b %%a0@,%%a1@+\n"     // 12
+        "3:\n"
+        "move.b %%a0@,%%a1@+\n"
         "4:\n"
-        "dbra %%d0,3b\n"            // 10(taken) 14(not taken)
+        "dbra %%d0,3b\n"
 
-        : : "i"(&F55_DATA()), "a"(data), "d"(len), "i"(0xecc080) : "a0", "a1", "a2", "d0"
+        : : "i"(&F55_DATA()), "a"(data), "d"(len), "i"(MER_BASE_ADDR) : "a0", "a1", "a2", "d0"
     );
 }
 
@@ -201,10 +201,8 @@ void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len)
         "3:\n"
         "move.b %%a1@+,%%a0@\n"
         "4:\n"
-        "dbra %%d0,3b\n"            // 10(taken) 14(not taken)
+        "dbra %%d0,3b\n"
 
-        : : "i"(&F55_DATA()), "a"(data), "d"(len) : "a0", "a1", "a2", "d0");
-//    for (size_t i = 0; i < len; i++) {
-//        F55_DATA() = data[i];
-//    }
+        : : "i"(&F55_DATA()), "a"(data), "d"(len) : "a0", "a1", "a2", "d0"
+    );
 }

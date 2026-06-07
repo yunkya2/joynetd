@@ -75,7 +75,13 @@ int wifi_getrssi(void);
 
 // wifi_getstat() - WiFiの接続状態を返す
 // in:  なし
-// out: 接続状態 (bit0:接続済み bit5:DHCPを使用しない bit6:APスキャン中 bit7:エラー発生)
+// out: 接続状態
+//      bit0: WiFIネットワークに参加中
+//      bit1: WiFIのscan処理中
+//      bit2: WiFI接続時のDHCPクライアント機能を使用しない
+//      bit5: 指定したSSIDのアクセスポイントが見つからない
+//      bit6: アクセスポイントの認証エラー
+//      bit7: コマンド処理中にエラーが発生した
 
 int wifi_getstat(void);
 

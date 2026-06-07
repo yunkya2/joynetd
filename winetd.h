@@ -142,7 +142,6 @@ struct route *do_rt_add(long ip, unsigned int bits, long gateway, struct iface *
 int do_rip(int mode);
 
 // inetarp.c
-
 int do_add_arp_table(long ipaddr, char *src);
 int do_del_arp_table(long ipaddr);
 void *do_search_arp_table(long ipaddr);

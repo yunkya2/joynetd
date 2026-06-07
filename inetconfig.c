@@ -64,17 +64,6 @@ static union inaddr w5500_dns;
 
 static int config_flags = 0;
 
-#if 0
-extern const char winetd_cfg_tmpl[];
-
-__asm__ (
-    ".section .rodata\n"
-    "winetd_cfg_tmpl:\n"
-    ".incbin \"winetd.cfg.tmpl.txt\"\n"
-    ".previous\n"
-);
-#endif
-
 //****************************************************************************
 // Private functions
 //****************************************************************************
@@ -217,48 +206,6 @@ int read_config(const char *cfgfile)
     fclose(fp);
     return 0;
 }
-
-#if 0
-int create_config(const char *cfgfile)
-{
-    char cfgdefault[256];
-    FILE *fp;
-
-    // Generate default random MAC address
-    generate_random_mac();
-
-    if (cfgfile == NULL) {
-        cfgfile = get_default_cfgfile(cfgdefault);
-    }
-
-    if ((fp = fopen(cfgfile, "r")) != NULL) {
-        _dos_print("設定ファイルが既に存在します\r\n");
-        fclose(fp);
-        return -1;
-    }
-
-    // Create default config file with random MAC address
-    if ((fp = fopen(cfgfile, "w")) == NULL) {
-        _dos_print("設定ファイルの生成に失敗しました\r\n");
-        return -1;
-    } else {
-        fprintf(fp, winetd_cfg_tmpl,
-                mactoa(w5500_mac),
-                trap_number == NOSPEC_INT ? ";" : "",
-                trap_number == NOSPEC_INT ? DEFAULT_TRAP : trap_number,
-                ifname == NOSPEC_STR ? ";" : "",
-                ifname == NOSPEC_STR ? DEFAULT_IFNAME : ifname,
-                dhcp_mode == NOSPEC_INT ? ";" : "",
-                dhcp_mode == NOSPEC_INT ? DEFAULT_DHCP : dhcp_mode,
-                hostname == NOSPEC_STR ? ";" : "",
-                hostname == NOSPEC_STR ? "" : hostname
-        );
-        fclose(fp);
-    }
-    _dos_print("設定ファイルを生成しました\r\n");
-    return 0;
-}
-#endif
 
 void set_config(void)
 {
