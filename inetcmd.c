@@ -39,7 +39,7 @@
 
 #include "tcpipdrv.h"
 #include "winetd.h"
-#include "winetdcmd.h"
+#include "wificmd.h"
 
 //****************************************************************************
 // Macros and definitions

@@ -22,8 +22,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef _WINETDCMD_H_
-#define _WINETDCMD_H_
+#ifndef _WIFICMD_H_
+#define _WIFICMD_H_
 
 enum {
   WTI_GETSTAT = 100,
@@ -34,4 +34,4 @@ enum {
   WTI_LEAVE,
 };
 
-#endif /* _WINETDCMD_H_ */
+#endif /* _WIFICMD_H_ */

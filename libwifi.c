@@ -32,7 +32,7 @@
 #include "tcpipdrv.h"
 
 #include "libwifi.h"
-#include "winetdcmd.h"
+#include "wificmd.h"
 
 //****************************************************************************
 // Macros and definitions

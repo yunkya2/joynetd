@@ -40,7 +40,7 @@
 
 #include "network.h"
 
-#include "winetdcmd.h"
+#include "wificmd.h"
 #include "libwifi.h"
 
 //****************************************************************************

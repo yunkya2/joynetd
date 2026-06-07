@@ -34,7 +34,7 @@
 #include <x68k/iocs.h>
 
 #include "winetd.h"
-#include "winetdcmd.h"
+#include "wificmd.h"
 
 //****************************************************************************
 // Macros and definitions
