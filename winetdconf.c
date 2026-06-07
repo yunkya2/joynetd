@@ -38,28 +38,11 @@
 
 #include "winetd.h"
 #include "winetdcmd.h"
+#include "libwifi.h"
 
 //****************************************************************************
 // Macros and definitions
 //****************************************************************************
-
-typedef long (*_ti_func) (long, void *);
-extern _ti_func __sock_func;
-
-_ti_func __sock_search_ti_entry (void);
-
-typedef struct _cyw43_ev_scan_result_t {
-    uint32_t _0[5];
-    uint8_t bssid[6];   ///< access point mac address
-    uint16_t _1[2];
-    uint8_t ssid_len;   ///< length of wlan access point name
-    uint8_t ssid[32];   ///< wlan access point name
-    uint32_t _2[5];
-    uint16_t channel;   ///< wifi channel
-    uint16_t _3;
-    uint8_t auth_mode;  ///< wifi auth mode \ref CYW43_AUTH_
-    int16_t rssi;       ///< signal strength
-} cyw43_ev_scan_result_t;
 
 //****************************************************************************
 // Global variables
@@ -68,63 +51,6 @@ typedef struct _cyw43_ev_scan_result_t {
 //****************************************************************************
 // Private functions
 //****************************************************************************
-
-#include <errno.h>
-
-#define check_sock_func() do { \
-    if (!__sock_func) { \
-        errno = ENOSYS; \
-        return -1; \
-    } \
-} while (0)
-
-int wifi_getrssi(void)
-{
-    check_sock_func();
-    return __sock_func(WTI_GETRSSI, NULL);
-}
-
-int wifi_getstat(void)
-{
-    check_sock_func();
-    return __sock_func(WTI_GETSTAT, NULL);
-}
-
-int wifi_scan(int sockfd)
-{
-    check_sock_func();
-    return __sock_func(WTI_SCAN, (long *)sockfd);
-}
-
-int wifi_scanresult(int sockfd, void *buf, size_t len)
-{
-    check_sock_func();
-
-    long arg[3];
-    arg[0] = sockfd;
-    arg[1] = (long)buf;
-    arg[2] = len;
-
-    return __sock_func(WTI_SCANRESULT, arg);
-}
-
-int wifi_join(char *ssid, char *password, uint32_t auth)
-{
-    check_sock_func();
-
-    long arg[3];
-    arg[0] = (long)ssid;
-    arg[1] = (long)password;
-    arg[2] = auth;
-
-    return __sock_func(WTI_JOIN, arg);
-}
-
-int wifi_leave(void)
-{
-    check_sock_func();
-    return __sock_func(WTI_LEAVE, 0);
-}
 
 //****************************************************************************
 // Program entry
@@ -165,7 +91,7 @@ int main(int argc, char **argv)
     } else if (strcmp(cmd, "scan") == 0) {
         wifi_scan(fd);
 
-        cyw43_ev_scan_result_t result;
+        wifi_scan_result_t result;
         int res;
         while ((res = wifi_scanresult(fd, &result, sizeof(result))) >= 0) {
             if (res > 0) {

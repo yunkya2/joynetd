@@ -56,7 +56,7 @@ LIBS += -lsocket
 
 all: $(TARGET) winetdconf.x
 
-winetdconf.x: winetdconf.o
+winetdconf.x: winetdconf.o libwifi.o
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(TARGET): $(OBJS)
