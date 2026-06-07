@@ -314,12 +314,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        do_wifi_leave();
-
-#if 0
-        w5500_ini();
         w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
-#endif
 
         if (data->vectno != 0) {
             _dos_intvcs(data->vectno, data->oldvect);
@@ -375,7 +370,7 @@ int main(int argc, char **argv)
         _dos_print("\r\n");
     }
 
-    do_wifi_leave();
+    w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
 
     init_etc_files();
     set_config();
@@ -395,7 +390,9 @@ int main(int argc, char **argv)
 #endif
 
     if (wifi_ssid[0] != '\0') {
-        _dos_print("WiFiに接続しています...");
+        _dos_print("WiFi SSID:");
+        _dos_print(wifi_ssid);
+        _dos_print(" に接続しています...");
 
         if (set_ifenable(true) < 0) {
             _dos_print("接続に失敗しました\r\n");
@@ -405,7 +402,7 @@ int main(int argc, char **argv)
             show_config(-1);
         }
     } else {
-        _dos_print("SSIDが設定されていません\r\n");
+        _dos_print("WiFi SSIDが設定されていません\r\n");
     }
 
     if (trap_number < -1) {    // 未使用のtrap番号を探す
