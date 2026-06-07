@@ -344,12 +344,14 @@ static int do_wifi_join(int argc, char **argv)
         }
     }
 
+#if 0
     if (ssid == NULL && WIFI_SSID[0] != '\0') {
         // ビルド時に与えられた既定値を使う
         ssid = WIFI_SSID;
         passwd = WIFI_PASSWORD;
         printf("設定済みのSSIDを使用します: %s\n", ssid);
     }
+#endif
 
     if (ssid == NULL) {
         int top_ssid = 0;
