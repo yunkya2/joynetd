@@ -47,6 +47,14 @@
 // Macros and definitions
 //****************************************************************************
 
+#ifndef WIFI_SSID
+#define WIFI_SSID ""
+#endif
+
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD ""
+#endif
+
 #define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
 
 // TBD
@@ -334,6 +342,13 @@ static int do_wifi_join(int argc, char **argv)
         } else if (passwd == NULL) {
             passwd = argv[i];
         }
+    }
+
+    if (ssid == NULL && WIFI_SSID[0] != '\0') {
+        // ビルド時に与えられた既定値を使う
+        ssid = WIFI_SSID;
+        passwd = WIFI_PASSWORD;
+        printf("設定済みのSSIDを使用します: %s\n", ssid);
     }
 
     if (ssid == NULL) {
