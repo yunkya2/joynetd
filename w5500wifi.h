@@ -36,9 +36,20 @@
 #define W5500_WRSSI         0x0052  // WiFi RSSI
 #define W5500_WAUTH         0x0054  // WiFi Authentication Type
 #define W5500_WDNSR         0x0058  // WiFi DNS Address
+
 #define W5500_WHOSTNAME     0x0060  // WiFi DHCP Hostname
 #define W5500_WSSID         0x0080  // WiFi SSID
 #define W5500_WPASSWORD     0x00a0  // WiFi Password
+
+#define W5500_WSTATSND      0x0060  // Status sndcnt
+#define W5500_WSTATRCV      0x0064  // Status rcvcnt
+#define W5500_WSTATERR      0x0068  // Status errcnt
+#define W5500_WSTATDRP      0x006c  // Status drpcnt
+
+#define W5500_WARPTBL       0x0060  // ARP Table (4+6 bytes x 16 entries)
+
+#define W5500_WARPIP        0x0060  // ARP IP Address
+#define W5500_WARPMAC       0x0064  // ARP MAC Address
 
 // WiFi Control Register Command code (W5500_WCR)
 #define W5500_WCR_GETSTAT       0x80    // WiFiの状態を取得する
@@ -48,6 +59,11 @@
 #define W5500_WCR_LEAVE         0x84    // WiFiネットワークから離脱する
 #define W5500_WCR_DHCPON        0x85    // WiFi接続時のDHCPクライアント機能を有効にする
 #define W5500_WCR_DHCPOFF       0x86    // WiFi接続時のDHCPクライアント機能を無効にする
+#define W5500_WCR_GETNETSTAT    0x87    // ネットワーク統計情報を取得する
+#define W5500_WCR_GETARPTABLE   0x88    // ARPテーブルの内容を取得する
+#define W5500_WCR_REQARP        0x89    // ARP要求を送信する
+#define W5500_WCR_ADDARP        0x8a    // ARPテーブルにエントリを追加する
+#define W5500_WCR_DELARP        0x8b    // ARPテーブルからエントリを削除する
 
 // WiFi Status Register bit definitions (W5500_WSR)
 #define W5500_WSR_JOINED        0x01    // WiFiネットワークに参加中
