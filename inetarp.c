@@ -64,11 +64,20 @@ typedef struct arp_table {
 //****************************************************************************
 
 #define ARPSIZE 17
-void *dummy_arp_table[ARPSIZE];
+static arp_table_t *arp_table_ptr[ARPSIZE];
+static arp_table_t arp_table[ARPSIZE];
 
 //****************************************************************************
 // Private functions
 //****************************************************************************
+
+static void send_command(uint8_t cmd)
+{
+    w5500_write_b(W5500_WCR, 0, cmd);
+    // コマンドが完了するまで待つ
+    while (w5500_read_b(W5500_WCR, 0) != 0)
+        ;
+}
 
 //****************************************************************************
 // Public functions
@@ -76,25 +85,50 @@ void *dummy_arp_table[ARPSIZE];
 
 int do_add_arp_table(long ipaddr, char *src)
 {
+    w5500_write_l(W5500_WARPIP, 0, ipaddr);
+    w5500_write(W5500_WARPMAC, 0, (uint8_t *)src, 6);
+    send_command(W5500_WCR_ADDARP);
     return 0;
 }
 
 int do_del_arp_table(long ipaddr)
 {
+    w5500_write_l(W5500_WARPIP, 0, ipaddr);
+    send_command(W5500_WCR_DELARP);
     return 0;
 }
 
 void *do_search_arp_table(long ipaddr)
 {
-    return 0;
+    for (int i = 0; i < 16; i++) {
+        if (arp_table[i].ip_addr == ipaddr) {
+            return &arp_table[i];
+        }
+    }
+    return NULL;
 }
 
 void *do_get_arp_table_top(void)
 {
-    return &dummy_arp_table;
+    send_command(W5500_WCR_GETARPTABLE);
+    for (int i = 0; i < 16; i++) {
+        long ip_addr = w5500_read_l(W5500_WARPTBL + i * (4 + 6), 0);
+        if (ip_addr) {
+            arp_table[i].ip_addr = ip_addr;
+            arp_table[i].hw_addr_len = 6;
+            w5500_read(W5500_WARPTBL + 4 + i * (4 + 6), 0, (uint8_t *)arp_table[i].hw_addr, 6);
+            arp_table[i].state = 1;
+            arp_table_ptr[i] = &arp_table[i];
+        } else {
+            arp_table_ptr[i] = NULL;
+        }
+    }
+    return &arp_table_ptr;
 }
 
 int do_arp_request(long target)
 {
+    w5500_write_l(W5500_WARPIP, 0, target);
+    send_command(W5500_WCR_REQARP);
     return 0;
 }
