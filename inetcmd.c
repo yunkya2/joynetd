@@ -243,6 +243,21 @@ static int validate_sockfd(int sockfd, int type)
     return -1;
 }
 
+static int send_open_command(int blk_sreg, int socket_stat, struct usock *u)
+{
+    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_OPEN);
+    if (wait_status(blk_sreg, socket_stat) < 0) {
+        PRINTF("socket open timeout\n");
+        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+        u->type = NOTUSED;
+        errno = EIO;
+        return -1;
+    }
+    u->rdysock = 1;
+    w5500_write_b(W5500_Sn_IR, 1, 0x1f); // S0_IR clear
+    return 0;
+}
+
 //****************************************************************************
 // Public functions
 //****************************************************************************
@@ -305,21 +320,25 @@ int do_socket(int domain, int type, int protocol)
 
             w5500_write_b(W5500_Sn_MR, blk_sreg, socket_mode);
             w5500_write_w(W5500_Sn_PORT, blk_sreg, port);
-            w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_OPEN);
-            if (wait_status(blk_sreg, socket_stat) < 0) {
-                PRINTF("socket open timeout\n");
-                w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
-                u->type = NOTUSED;
-                errno = EIO;
-                return -1;
+            w5500_write_l(W5500_Sn_DIPR, blk_sreg, 0);
+            w5500_write_w(W5500_Sn_DPORT, blk_sreg, 0);
+
+            if (type != SOCK_DGRAM) {
+                // TCP, RAWIPの場合はここでsocketをopenする
+                if (send_open_command(blk_sreg, socket_stat, u) < 0) {
+                    return -1;
+                }
+            } else {
+                // UDPはまだ受信port番号が決まらないのでopenしない
+                u->rdysock = 0;
             }
+
             u->type = socket_type;
             u->refcnt = 1;
             u->noblock = 0;
             u->flush = '\n';
             strcpy(u->eol, "\r\n");
             usock_port[i] = port;
-            w5500_write_b(W5500_Sn_IR, 1, 0x1f); // S0_IR clear
             return SOCKBASE + i;
         }
     }
@@ -352,6 +371,13 @@ int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     struct sockaddr_in *sin = (struct sockaddr_in *)addr;
     w5500_write_w(W5500_Sn_PORT, blk_sreg, ntohs(sin->sin_port));
+
+    if (u->type == TYPE_UDP && !u->rdysock) {
+        // bindによって受信port番号が決まったのでopenする
+        if (send_open_command(blk_sreg, W5500_Sn_SR_UDP, u) < 0) {
+            return -1;
+        }
+    }
 
     return 0;
 }
@@ -482,6 +508,13 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     w5500_write_w(W5500_Sn_DPORT, blk_sreg, ntohs(sin->sin_port));
 
     if (u->type != TYPE_TCP) {
+        if (u->type == TYPE_UDP && !u->rdysock) {
+            // UDPの送信先が決まったのでephemeral portを使ってopenする
+            // (ローカルポート番号はすでにsocket()で設定済み)
+            if (send_open_command(blk_sreg, W5500_Sn_SR_UDP, u) < 0) {
+                return -1;
+            }
+        }
         return 0;
     }
 
@@ -641,6 +674,14 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
         struct sockaddr_in *sin = (struct sockaddr_in *)dest_addr;
         w5500_write_l(W5500_Sn_DIPR, blk_sreg, ntohl(sin->sin_addr.s_addr));
         w5500_write_w(W5500_Sn_DPORT, blk_sreg, ntohs(sin->sin_port));
+
+        if (u->type == TYPE_UDP && !u->rdysock) {
+            // UDPの送信先が決まったのでephemeral portを使ってopenする
+            // (ローカルポート番号はすでにsocket()で設定済み)
+            if (send_open_command(blk_sreg, W5500_Sn_SR_UDP, u) < 0) {
+                return -1;
+            }
+        }
     }
 
     if (u->type == TYPE_TCP) {
