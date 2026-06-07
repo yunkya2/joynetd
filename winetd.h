@@ -96,6 +96,7 @@ int do_wifi_scan(int sockfd);
 int do_wifi_scanresult(int sockfd, void *buf, size_t len);
 int do_wifi_join(char *ssid, char *password, long auth);
 int do_wifi_leave(void);
+int do_wifi_dhcpmode(int enable);
 
 // inetiface.c
 struct iface;

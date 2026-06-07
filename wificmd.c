@@ -149,3 +149,9 @@ int do_wifi_leave(void)
     wifi_command(W5500_WCR_LEAVE);
     return 0;
 }
+
+int do_wifi_dhcpmode(int enable)
+{
+    wifi_command(enable ? W5500_WCR_DHCPON : W5500_WCR_DHCPOFF);
+    return 0;
+}

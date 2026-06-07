@@ -363,6 +363,8 @@ int main(int argc, char **argv)
     init_etc_files();
     set_config();
 
+    do_wifi_dhcpmode(dhcp_mode);
+
 #if 0
     if (dhcp_mode) {
         _dos_print("ネットワーク設定をDHCPで取得しています...\r\n");
