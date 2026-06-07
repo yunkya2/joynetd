@@ -45,7 +45,10 @@ OBJS += inetconfig.o inetcmd.o inetiface.o inetdns.o inetroute.o inetetc.o
 OBJS += w55pileder.o
 LIBS += -lsocket
 
-all: $(TARGET)
+all: $(TARGET) winetdconf.x
+
+winetdconf.x: winetdconf.o
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(TARGET): $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) -nostartfiles

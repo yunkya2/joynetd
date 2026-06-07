@@ -1096,6 +1096,76 @@ char *do_sockstate(int sockfd)
 
 // ---------------------------------------------------------------------------
 
+#include "winetdcmd.h"
+
+static void wifi_command(uint8_t cmd)
+{
+    w5500_write_b(W5500_WCR, 0, cmd);
+    while (w5500_read_b(W5500_WCR, 0) != 0)
+        ;
+}
+
+int do_wifi_getrssi(void)
+{
+    wifi_command(W5500_WCR_GETRSSI);
+    return (int8_t)w5500_read_b(W5500_WRSSI, 0);
+}
+
+int do_wifi_getstat(void)
+{
+    wifi_command(W5500_WCR_GETSTAT);
+    uint8_t newstat = w5500_read_b(W5500_WSR, 0);
+    return newstat;
+}
+
+int do_wifi_scan(int sockfd)
+{
+    int sno = validate_sockfd(sockfd, SOCKFD_SOCKET);
+    if (sno < 0) {
+        return -1;
+    }
+
+    if ((do_wifi_getstat() & W5500_WSR_SCANNING) != 0) {
+        PRINTF("WiFi is already scanning\n");
+        return -1;
+    }
+
+    int blk_sreg = sno * 4 + 1;
+    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_WCR_SCAN);
+    return 0;
+}
+
+int do_wifi_scanresult(int sockfd, void *buf, size_t len)
+{
+    int sno = validate_sockfd(sockfd, SOCKFD_SOCKET);
+    if (sno < 0) {
+        return -1;
+    }
+
+    int blk_sreg = sno * 4 + 1;
+    int blk_rxbuf = sno * 4 + 3;
+
+    int bytes = w5500_read_w(W5500_Sn_RX_RSR, blk_sreg);
+    if (bytes == 0) {
+        if ((do_wifi_getstat() & W5500_WSR_SCANNING) == 0) {
+            return -1;
+        } else {
+            return 0;
+        }
+    }
+
+    len = (len < bytes) ? len : bytes;
+    int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
+//    printf("len = %d bytes= %d ptr=%d\n", len, bytes, ptr);
+    w5500_read(ptr, blk_rxbuf, (uint8_t *)buf, len);
+    ptr += len;
+    w5500_write_w(W5500_Sn_RX_RD, blk_sreg, ptr);
+    w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_RECV);
+    return len;
+}
+
+// ---------------------------------------------------------------------------
+
 int do_command(void)
 {
     int cmd;
@@ -1312,6 +1382,16 @@ int do_command(void)
 
     case _TI_rip:
         res = do_rip((int)arg);
+        break;
+
+    case WTI_GETRSSI:
+        res = do_wifi_getrssi();
+        break;
+    case WTI_SCAN:
+        res = do_wifi_scan((int)arg);
+        break;
+    case WTI_SCANRESULT:
+        res = do_wifi_scanresult((int)arg[0], (void *)arg[1], arg[2]);
         break;
 
     default:
