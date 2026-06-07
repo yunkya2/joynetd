@@ -33,7 +33,7 @@
 // W5500 APIs
 //****************************************************************************
 
-void w5500_ini(void);
+char *w5500_ini(void);
 
 uint8_t w5500_read_b(uint16_t addr, uint8_t block);
 uint16_t w5500_read_w(uint16_t addr, uint8_t block);

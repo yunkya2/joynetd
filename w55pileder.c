@@ -30,6 +30,7 @@
 #include <x68k/iocs.h>
 
 #include "w55pileder.h"
+#include "w5500wifi.h"
 
 #include <stdio.h>
 
@@ -37,6 +38,9 @@
 // Macros and definitions
 //****************************************************************************
 
+#define WIFI_IDENT  "WiFi\x00\x00\x00\x01"
+
+#define MER_BASE_ADDR 0xecc080
 #define F55_BASE_ADDR 0xecc0a0
 
 #define F55_ADDR()  (*((volatile uint8_t *)(F55_BASE_ADDR + 0x01)))
@@ -45,6 +49,8 @@
 //****************************************************************************
 // Global variables
 //****************************************************************************
+
+static uint8_t w5500_version[8 + 1];
 
 //****************************************************************************
 // Private functions
@@ -61,10 +67,24 @@ static inline void set_addr(uint16_t addr, uint8_t block)
 // Public functions
 //****************************************************************************
 
-void w5500_ini(void)
+char *w5500_ini(void)
 {
-    // TBD
-    // WiFi pilederの検出
+    uint8_t dummy;
+
+    if (_dos_bus_err((void *)MER_BASE_ADDR, &dummy, 1) != 0) {
+        return NULL;    // Mercury Unitが存在しない
+    }
+
+    w5500_read(W5500_WIDENT, 0, w5500_version, 8);
+    w5500_version[8] = '\0';
+    if (strcmp((char *)w5500_version, WIFI_IDENT) != 0) {
+        return NULL;    // WiFi pilederが存在しない
+    }
+
+    w5500_read(W5500_WVERSION, 0, w5500_version, 8);
+    w5500_version[8] = '\0';
+
+    return (char *)w5500_version;
 }
 
 
@@ -96,10 +116,6 @@ uint32_t w5500_read_l(uint16_t addr, uint8_t block)
 
 void w5500_read(uint16_t addr, uint8_t block, uint8_t *data, size_t len)
 {
-    if (len > 2048) {
-        printf("f55_read: len=%lu is too large\n", len);
-    }
-
     set_addr(addr, block);
     __asm__ volatile (
         "movea.l %0,%%a0\n"

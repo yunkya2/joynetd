@@ -364,18 +364,18 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    w5500_ini();
+    const char *w5500_version = w5500_ini();
+
+    if (w5500_version == NULL) {
+        _dos_print("WiFi+PCM Pilederが接続されていません\r\n");
+        return 1;
+    } else {
+        _dos_print("WiFi+PCM Pileder version: ");
+        _dos_print(w5500_version);
+        _dos_print("\r\n");
+    }
 
     do_wifi_leave();
-
-#if 0
-    w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
-    usleep(W5500_PHY_RESET_WAIT_US);
-    if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
-//        printf("ポート %d にイーサネットじょい君が接続されていません\n", joy_port);
-        return 1;
-    }
-#endif
 
     init_etc_files();
     set_config();
@@ -395,12 +395,12 @@ int main(int argc, char **argv)
 #endif
 
     if (wifi_ssid[0] != '\0') {
-        _dos_print("WiFiに接続しています...\r\n");
+        _dos_print("WiFiに接続しています...");
 
         if (set_ifenable(true) < 0) {
-            _dos_print("WiFiへの接続に失敗しました\r\n");
+            _dos_print("接続に失敗しました\r\n");
         } else {
-            _dos_print("WiFiに接続しました\r\n");
+            _dos_print("接続しました\r\n");
             do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
             show_config(-1);
         }
