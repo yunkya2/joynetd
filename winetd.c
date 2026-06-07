@@ -416,18 +416,6 @@ int main(int argc, char **argv)
 
     do_wifi_dhcpmode(dhcp_mode);
 
-#if 0
-    if (dhcp_mode) {
-        _dos_print("ネットワーク設定をDHCPで取得しています...\r\n");
-        dhcp_result = idhcp_request(opt_v, ifname);
-        if (dhcp_result != NOERROR) {
-            _dos_print("DHCPリースの取得に失敗しました\r\n");
-        } else {
-            _dos_print("DHCPリースの取得に成功しました\r\n");
-        }
-    }
-#endif
-
     if (wifi_ssid[0] != '\0') {
         _dos_print("WiFi SSID:");
         _dos_print(wifi_ssid);
