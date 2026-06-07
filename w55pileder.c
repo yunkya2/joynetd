@@ -161,7 +161,34 @@ void w5500_write_l(uint16_t addr, uint8_t block, uint32_t data)
 void w5500_write(uint16_t addr, uint8_t block, const uint8_t *data, size_t len)
 {
     set_addr(addr, block);
-    for (size_t i = 0; i < len; i++) {
-        F55_DATA() = data[i];
-    }
+    __asm__ volatile (
+        "movea.l %0,%%a0\n"
+        "movea.l %1,%%a1\n"
+        "move.w  %2,%%d0\n"
+
+        "bra.s   2f\n"
+        "1:\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "move.b  %%a1@+,%%a0@\n"
+        "2:\n"
+        "subq.w  #8,%%d0\n"
+        "bcc.s   1b\n"
+        "addq.w  #8,%%d0\n"
+        "bra.s   4f\n"
+
+        "3:\n"
+        "move.b %%a1@+,%%a0@\n"
+        "4:\n"
+        "dbra %%d0,3b\n"            // 10(taken) 14(not taken)
+
+        : : "i"(&F55_DATA()), "a"(data), "d"(len) : "a0", "a1", "a2", "d0");
+//    for (size_t i = 0; i < len; i++) {
+//        F55_DATA() = data[i];
+//    }
 }
