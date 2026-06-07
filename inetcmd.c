@@ -1118,7 +1118,7 @@ int do_command(void)
         break;
 
     case _TI_get_version:
-        res = 0x00010001;
+        res = 0x57690001;
         break;
 
     case _TI_add_arp_table:

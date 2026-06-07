@@ -66,8 +66,11 @@ int wifi_init(void)
     }
     close(fd);
 
-    // TBD wifiサービス利用可否確認
-
+    uint32_t version = __sock_func(_TI_get_version, NULL);
+    if ((version & 0xffff0000) != 0x57690000) {   // "Wi"
+        errno = ENOSYS;
+        return -1;
+    }
     return 0;
 }
 
