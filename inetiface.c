@@ -39,6 +39,7 @@
 
 #include "tcpipdrv.h"
 #include "winetd.h"
+#include "wificmd.h"
 
 //****************************************************************************
 // Macros and definitions
@@ -46,6 +47,7 @@
 
 static int iface_stop(struct iface *);
 static int iface_dummy(struct iface *);
+static int iface_update(struct iface *);
 
 //****************************************************************************
 // Global variables
@@ -56,7 +58,7 @@ static iface joyif = {
 
     .config = (void *)iface_dummy,
     .stop = iface_stop,
-    .update = (void *)iface_dummy,
+    .update = (void *)iface_update,
     .send = (void *)iface_dummy,
     .output = (void *)iface_dummy,
     .input = (void *)iface_dummy,
@@ -91,6 +93,23 @@ static int iface_stop(struct iface *i)
 static int iface_dummy(struct iface *i)
 {
     PRINTF("joynetd: iface_dummy()\n");
+    return 0;
+}
+
+static int iface_update(struct iface *i)
+{
+    PRINTF("joynetd: iface_update()\n");
+
+    w5500_write_b(W5500_WCR, 0, W5500_WCR_GETNETSTAT);
+    while (w5500_read_b(W5500_WCR, 0) != 0)
+        ;
+
+    i->ipsndcnt = w5500_read_l(W5500_WSTATSND, 0);
+    i->rawsndcnt = w5500_read_l(W5500_WSTATSND, 0);
+    i->snderrcnt = w5500_read_l(W5500_WSTATERR, 0);
+    i->iprcvcnt = w5500_read_l(W5500_WSTATRCV, 0);
+    i->rawrcvcnt = w5500_read_l(W5500_WSTATRCV, 0);
+    i->rcverrcnt = w5500_read_l(W5500_WSTATDRP, 0);
     return 0;
 }
 
