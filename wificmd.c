@@ -78,6 +78,7 @@ int do_wifi_getstat(void)
     if (!(oldstat & W5500_WSR_JOINED) && (newstat & W5500_WSR_JOINED)) {
         do_rt_add(0, 0, w5500_read_l(W5500_GAR, 0), NULL, 16, 0, 1);
         do_dns_add(w5500_read_l(W5500_WDNSR, 0));
+        ifenable = true;
     }
     return newstat;
 }
@@ -153,5 +154,25 @@ int do_wifi_leave(void)
 int do_wifi_dhcpmode(int enable)
 {
     wifi_command(enable ? W5500_WCR_DHCPON : W5500_WCR_DHCPOFF);
+    return 0;
+}
+
+int do_wifi_get_winetd_config(wifi_winetd_config_t *config)
+{
+    config->trap_number = trap_number;
+    config->ifname = ifname;
+
+#if 1
+    w5500_read(W5500_WSSID, 0, (uint8_t *)wifi_ssid, 32);
+    wifi_ssid[32] = '\0';
+    w5500_read(W5500_WPASSWORD, 0, (uint8_t *)wifi_passwd, 64);
+    wifi_passwd[64] = '\0';
+#endif
+
+    config->ssid = wifi_ssid;
+    config->password = wifi_passwd;
+    config->dhcp_mode = dhcp_mode;
+    config->hostname = hostname;
+
     return 0;
 }

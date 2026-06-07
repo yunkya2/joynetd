@@ -156,3 +156,13 @@ iface *wifi_get_iface(void)
 {
     return (iface *)__sock_func(_TI_get_iface_list, NULL);
 }
+
+// wifi_get_winetd_config() - winetd.xの設定を取得する
+// in:  wifi_winetd_config_t *
+// out: 0:成功
+
+int wifi_get_winetd_config(wifi_winetd_config_t *config)
+{
+    __sock_func(WTI_GET_WINETD_CONFIG, (long *)config);
+    return 0;
+}

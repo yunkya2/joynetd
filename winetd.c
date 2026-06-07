@@ -138,7 +138,7 @@ int set_ifenable(bool enable)
             return -1;
         }
 
-        do_wifi_join(wifi_ssid, wifi_passwd, -1);
+        do_wifi_join(wifi_ssid, wifi_passwd, -1);   // TBD
 
         int t = 0;
         while (t < WIFI_JOIN_TIMEOUT) {

@@ -32,6 +32,7 @@ enum {
   WTI_SCANRESULT,
   WTI_JOIN,
   WTI_LEAVE,
+  WTI_GET_WINETD_CONFIG,
 };
 
 #endif /* _WIFICMD_H_ */

@@ -1343,6 +1343,9 @@ int do_command(void)
     case WTI_LEAVE:
         res = do_wifi_leave();
         break;
+    case WTI_GET_WINETD_CONFIG:
+        res = (int)do_wifi_get_winetd_config((wifi_winetd_config_t *)arg);
+        break;
 
     default:
         break;

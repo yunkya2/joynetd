@@ -45,6 +45,15 @@ typedef struct wifi_scan_result {
     int16_t rssi;       ///< signal strength
 } wifi_scan_result_t;
 
+typedef struct wifi_winetd_config {
+    int trap_number;
+    char *ifname;
+    char *ssid;
+    char *password;
+    int dhcp_mode;
+    char *hostname;
+} wifi_winetd_config_t;
+
 //****************************************************************************
 // Public functions
 //****************************************************************************
@@ -101,5 +110,11 @@ int wifi_leave(void);
 // out: iface *
 
 iface *wifi_get_iface(void);
+
+// wifi_get_winetd_config() - winetd.xの設定を取得する
+// in:  wifi_winetd_config_t *
+// out: 0:成功
+
+int wifi_get_winetd_config(wifi_winetd_config_t *config);
 
 #endif /* _LIBWIFI_H_ */

@@ -39,6 +39,7 @@
 
 #include "network.h"
 #include "w55pileder.h"
+#include "libwifi.h"
 
 #define NOSPEC_INT      -99999
 #define NOSPEC_STR      NULL
@@ -97,6 +98,7 @@ int do_wifi_scanresult(int sockfd, void *buf, size_t len);
 int do_wifi_join(char *ssid, char *password, long auth);
 int do_wifi_leave(void);
 int do_wifi_dhcpmode(int enable);
+int do_wifi_get_winetd_config(wifi_winetd_config_t *config);
 
 // inetiface.c
 struct iface;
