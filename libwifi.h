@@ -26,6 +26,7 @@
 #define _LIBWIFI_H_
 
 #include <stdint.h>
+#include "w5500wifi.h"
 
 //****************************************************************************
 // Macros and definitions
@@ -94,5 +95,11 @@ int wifi_join(char *ssid, char *password, uint32_t auth);
 // out: 0:成功
 
 int wifi_leave(void);
+
+// wifi_get_iface() - WiFi interfaceの情報を取得する
+// in:  なし
+// out: iface *
+
+iface *wifi_get_iface(void);
 
 #endif /* _LIBWIFI_H_ */

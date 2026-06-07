@@ -23,9 +23,13 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/socket.h>
+
+#include "network.h"
+#include "tcpipdrv.h"
 
 #include "libwifi.h"
 #include "winetdcmd.h"
@@ -142,4 +146,13 @@ int wifi_leave(void)
 {
     check_sock_func();
     return __sock_func(WTI_LEAVE, 0);
+}
+
+// wifi_get_iface() - WiFi interfaceの情報を取得する
+// in:  なし
+// out: iface *
+
+iface *wifi_get_iface(void)
+{
+    return (iface *)__sock_func(_TI_get_iface_list, NULL);
 }

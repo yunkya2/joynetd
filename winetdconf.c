@@ -104,6 +104,8 @@ char *getpass(const char *prompt)
 // Program entry
 //****************************************************************************
 
+#include "network.h"
+
 int main(int argc, char **argv)
 {
     if (wifi_init() < 0) {
@@ -158,6 +160,14 @@ int main(int argc, char **argv)
         close(fd);
     } else {
         printf("RSSI=%ddBm\n", -wifi_getrssi());
+
+        iface *wif = wifi_get_iface();
+
+        printf("Interface: %s\n", wif->name);
+        printf("Status: %s\n", wif->flag & IFACE_UP ? "up" : "down");
+        printf("IP addr : %s\n", inet_ntoa(*(struct in_addr *)&wif->my_ip_addr));
+        printf("Netmask : %s\n", inet_ntoa(*(struct in_addr *)&wif->net_mask));
+        printf("Broadcast : %s\n", inet_ntoa(*(struct in_addr *)&wif->broad_cast));
     }
 
     return 0;
