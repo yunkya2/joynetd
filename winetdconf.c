@@ -168,8 +168,16 @@ static int do_show_stat(void)
     return 0;
 }
 
-static int do_wifi_scan(int argc, char **argv, char ***out_ssid_list)
+static int do_wifi_scan(int argc, char **argv, char ***out_ssid_list, int *num_ssid, int *top_ssid)
 {
+    if (top_ssid != NULL) {
+        *top_ssid = 0;
+    }
+    if (num_ssid != NULL) {
+        *num_ssid = 0;
+    }
+    int max_rssi = -128;
+
     bool verbose = false;
     if (argc > 0 && strcmp(argv[0], "-v") == 0) {
         verbose = true;
@@ -189,6 +197,15 @@ static int do_wifi_scan(int argc, char **argv, char ***out_ssid_list)
     while ((res = wifi_scanresult(fd, &result, sizeof(result))) >= 0) {
         if (res > 0) {
             count++;
+            int rssi = (int16_t)le16toh(result.rssi);
+
+            if (max_rssi < rssi) {
+                max_rssi = rssi;
+                if (top_ssid != NULL) {
+                    *top_ssid = count;
+                }
+            }
+
             if (verbose) {
                 printf("(%d) SSID:%s BSSID:%02x:%02x:%02x:%02x:%02x:%02x Channel:%d Auth:%d RSSI:%ddBm\n",
                        count,
@@ -211,6 +228,10 @@ static int do_wifi_scan(int argc, char **argv, char ***out_ssid_list)
             }
         }
         usleep(100 * 1000);
+    }
+
+    if (num_ssid != NULL) {
+        *num_ssid = count;
     }
 
     close(fd);
@@ -255,36 +276,43 @@ static int do_wifi_join(int argc, char **argv)
     }
 
     if (ssid == NULL) {
-        res = do_wifi_scan(verbose_opt ? 1 : 0, verbose_opt, &ssid_list);
+        int top_ssid = 0;
+        int num_ssid = 0;
+
+        printf("SSIDが指定されていないためアクセスポイントをスキャンします...\n");
+        res = do_wifi_scan(verbose_opt ? 1 : 0, verbose_opt, &ssid_list,
+                           &num_ssid, &top_ssid);
         if (res < 0) {
             return -1;
         }
-
-        if (ssid_list != NULL) {
-            char **ssidp;
-            int max_ssid = 0;
-            for (ssidp = ssid_list; *ssidp != NULL; ssidp++)
-                max_ssid++;
-
-            printf("SSIDを選択してください (1-%d): ", max_ssid);
+        if (num_ssid == 0) {
+            printf("アクセスポイントが見つかりません\n");
+            return -1;
+        } else if (num_ssid == 1) {
+            ssid = ssid_list[0];
+        } else {
+            printf("SSIDを 1-%d の値で選択してください (default:%d): ", num_ssid, top_ssid);
             char input[16];
             fgets(input, sizeof(input), stdin);
             int choice = atoi(input);
-            if (choice < 1 || choice > max_ssid) {
-                printf("無効な選択です\n");
+            if (choice == 0) {
+                choice = top_ssid;
+            } else if (choice < 1 || choice > num_ssid) {
+                printf("SSIDの指定が無効です\n");
                 return -1;
             }
             ssid = ssid_list[choice - 1];
+        }
 
-            if (!nopasswd) {
-                printf("SSID %s のパスワードを入力: ", ssid);
-                passwd = getpass("");
-                if (passwd == NULL) {
-                    return -1;
-                }
-            } else {
-                passwd = "";
+        if (!nopasswd) {
+            printf("SSID %s のパスワードを入力: ", ssid);
+            passwd = getpass("");
+            if (passwd == NULL) {
+                return -1;
             }
+        } else {
+            passwd = "";
+        }
 
 #if 0
             for (ssidp = ssid_list; *ssidp != NULL; ssidp++) {
@@ -292,11 +320,9 @@ static int do_wifi_join(int argc, char **argv)
             }
             free(ssid_list);
 #endif
-        } else {
-            printf("WiFiアクセスポイントが見つかりません\n");
-            return -1;
-        }
     }
+
+    printf("アクセスポイント %s に接続します...\n", ssid);
 
 //    printf("SSID: %s password: %s\n", ssid, passwd);
 
@@ -362,7 +388,7 @@ int main(int argc, char **argv)
     if (argc <= 1 || strcmp(argv[1], "stat") == 0) {
         res = do_show_stat();
     } else if (strcmp(argv[1], "scan") == 0) {
-        res = do_wifi_scan(argc - 2, &argv[2], NULL);
+        res = do_wifi_scan(argc - 2, &argv[2], NULL, NULL, NULL);
     } else if (strcmp(argv[1], "connect") == 0 || strcmp(argv[1], "join") == 0) {
         res = do_wifi_join(argc - 2, &argv[2]);
     } else if (strcmp(argv[1], "disconnect") == 0 || strcmp(argv[1], "leave") == 0) {
