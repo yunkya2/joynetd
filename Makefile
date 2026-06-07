@@ -30,8 +30,17 @@ RANLIB = $(CROSS)ranlib
 
 GIT_REPO_VERSION=$(shell git describe --tags --always)
 
+WIFICONFIG ?= ../.wificonfig.cmake
+ifneq ($(wildcard $(WIFICONFIG)),)
+include $(WIFICONFIG)
+endif
+WIFI_SSID ?=
+WIFI_PASSWORD ?=
+
 CFLAGS = -Wall -Os -g $(INC) $(DEFS) -MMD -MP
 CFLAGS += -DGIT_REPO_VERSION=\"$(GIT_REPO_VERSION)\"
+CFLAGS += -DWIFI_SSID=\"$(WIFI_SSID)\"
+CFLAGS += -DWIFI_PASSWORD=\"$(WIFI_PASSWORD)\"
 ASFLAGS = -I. -MMD -MP
 LDFLAGS =
 LDFLAGS += -Wl,-Map,$(@:.x=.map) -specs=nano.specs
