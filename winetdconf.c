@@ -264,7 +264,7 @@ static int do_wifi_scan(int argc, char **argv, char ***out_ssid_list, int *num_s
         verbose = true;
     }
 
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
         printf("socket error\n");
         return -1;
@@ -399,23 +399,16 @@ static int do_wifi_join(int argc, char **argv)
             }
             ssid = ssid_list[choice - 1];
         }
+    }
 
-        if (!nopasswd) {
-            printf("%s のパスワードを入力: ", ssid);
-            passwd = readpass("");
-            if (passwd == NULL) {
-                return -1;
-            }
-        } else {
-            passwd = "";
+    if (!nopasswd && passwd == NULL) {
+        printf("%s のパスワードを入力: ", ssid);
+        passwd = readpass("");
+        if (passwd == NULL) {
+            return -1;
         }
-
-#if 0
-            for (ssidp = ssid_list; *ssidp != NULL; ssidp++) {
-                free((void *)*ssidp);
-            }
-            free(ssid_list);
-#endif
+    } else {
+        passwd = "";
     }
 
     printf("WiFi SSID:%s に接続しています...", ssid);
