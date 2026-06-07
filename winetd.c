@@ -33,7 +33,7 @@
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
 
-#include "joynetd.h"
+#include "winetd.h"
 
 //****************************************************************************
 // Macros and definitions
@@ -45,19 +45,17 @@ struct dos_devheader {
     void        *strategy;
     void        *interrupt;
     char        name[8];
-    struct joynetd_data *data;
+    struct winetd_data *data;
 };
 
-struct joynetd_data {
+struct winetd_data {
     int magic;
     void *memblock;
     int vectno;
     void *oldvect;
-    void *oldvect_joy;
-    int joyport;
 };
 
-#define JOYNET_MAGIC    0x4a4f5902  // "JOY\2"
+#define WINET_MAGIC     0x57694e01  // "WiN\1"
 
 #define W5500_PHY_RESET_WAIT_US     1000
 #define W5500_PHY_POLL_WAIT_US      10000
@@ -69,30 +67,21 @@ struct joynetd_data {
 
 extern struct dos_devheader devheader;  // Human68kのデバイスヘッダ
 
-extern int joyget();
-extern uint16_t joyget_stat;
-extern uint16_t joyget_port;
-extern void *joyget_org;
-
-struct joynetd_data joynetd_data = {
-    .magic = JOYNET_MAGIC,
+struct winetd_data winetd_data = {
+    .magic = WINET_MAGIC,
     .vectno = 0,
-    .joyport = -1,
 };
 
 char *cfgfile = NULL;
-int joy_port = NOSPEC_INT;
 int trap_number = NOSPEC_INT;
 char *ifname = NOSPEC_STR;
 int dhcp_mode = NOSPEC_INT;
 char *hostname = NOSPEC_STR;
-char *phymode = NOSPEC_STR;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
 static bool opt_c = false;  // -c option
 static bool opt_v = false;  // -v option
-static int phymode_val = -1;    // -m option
 
 //****************************************************************************
 // Private functions
@@ -138,87 +127,6 @@ static void *find_tcpip(void)
     return NULL;
 }
 
-static const char *w5500_phy_mode_name(uint8_t phycfgr)
-{
-    switch (phycfgr & W5500_PHYCFGR_OPMDC_MASK) {
-    case W5500_PHYCFGR_OPMDC_10H:
-        return "10H";
-    case W5500_PHYCFGR_OPMDC_10F:
-        return "10F";
-    case W5500_PHYCFGR_OPMDC_100H:
-        return "100H";
-    case W5500_PHYCFGR_OPMDC_100F:
-        return "100F";
-    case W5500_PHYCFGR_OPMDC_100H_AN:
-        return "100H_AN";
-    case W5500_PHYCFGR_OPMDC_POWER_DOWN:
-        return "POWER_DOWN";
-    case W5500_PHYCFGR_OPMDC_ALL_AN:
-        return "ALL_AN";
-    default:
-        return "UNKNOWN";
-    }
-}
-
-static int parse_phy_mode(const char *mode)
-{
-    if (mode == NULL || strcasecmp(mode, "auto") == 0) {
-        return W5500_PHYCFGR_OPMDC_ALL_AN;
-    } else if (strcasecmp(mode, "10h") == 0) {
-        return W5500_PHYCFGR_OPMDC_10H;
-    } else if (strcasecmp(mode, "10f") == 0) {
-        return W5500_PHYCFGR_OPMDC_10F;
-    } else if (strcasecmp(mode, "100h") == 0) {
-        return W5500_PHYCFGR_OPMDC_100H;
-    } else if (strcasecmp(mode, "100f") == 0) {
-        return W5500_PHYCFGR_OPMDC_100F;
-    } else if (strcasecmp(mode, "100h_an") == 0) {
-        return W5500_PHYCFGR_OPMDC_100H_AN;
-    }
-    return -1;
-}
-
-static void dump_phycfgr(void)
-{
-    if (!opt_v) {
-        return;
-    }
-
-    uint8_t phycfgr = w5500_read_b(W5500_PHYCFGR, 0);
-
-    printf("PHYCFGR=0x%02x (%s cfg=%s, mode=%s, link=%s, speed=%s, duplex=%s)\n",
-           phycfgr,
-           (phycfgr & W5500_PHYCFGR_OPMD) ? "sw" : "hw",
-           w5500_phy_mode_name(phycfgr),
-           (phycfgr & W5500_PHYCFGR_OPMD) ? "PHYCFGR" : "PMODE",
-           (phycfgr & W5500_PHYCFGR_LNK) ? "up" : "down",
-           (phycfgr & W5500_PHYCFGR_SPD) ? "100M" : "10M",
-           (phycfgr & W5500_PHYCFGR_DPX) ? "full" : "half");
-}
-
-static void w5500_apply_phymode(int mode)
-{
-    uint8_t phycfgr = W5500_PHYCFGR_OPMD | (mode & W5500_PHYCFGR_OPMDC_MASK);
-    w5500_write_b(W5500_PHYCFGR, 0, phycfgr & ~W5500_PHYCFGR_RST);
-    usleep(W5500_PHY_RESET_WAIT_US);
-    w5500_write_b(W5500_PHYCFGR, 0, phycfgr | W5500_PHYCFGR_RST);
-    usleep(W5500_PHY_RESET_WAIT_US);
-}
-
-static bool w5500_wait_for_link(unsigned int timeout_ms)
-{
-    unsigned int elapsed_ms = 0;
-
-    while (elapsed_ms < timeout_ms) {
-        if (w5500_read_b(W5500_PHYCFGR, 0) & W5500_PHYCFGR_LNK) {
-            return true;
-        }
-        usleep(W5500_PHY_POLL_WAIT_US);
-        elapsed_ms += W5500_PHY_POLL_WAIT_US / 1000;
-    }
-    return false;
-}
-
 int set_ifenable(bool enable)
 {
     ifenable = enable;
@@ -259,23 +167,6 @@ static int parse_cmdline(int argc, char **argv)
                 break;
             case 'v':
                 opt_v = true;
-                break;
-            case 'm':
-                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
-                    return -1;
-                }
-                phymode = p;
-                break;
-            case 'p':
-            case 'j':
-                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
-                    return -1;
-                }
-                v = atoi(p);
-                if (v > 2) {
-                    return -1;
-                }
-                joy_port = v;
                 break;
             case 't':
                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
@@ -320,9 +211,8 @@ static int parse_cmdline(int argc, char **argv)
 static void help(void)
 {
     printf(
-        "使用法: joynetd [-j<port number>] [オプション]\n"
+        "使用法: winetd [-j<port number>] [オプション]\n"
         "オプション:\n"
-        "  -j<port number>    使用するジョイスティックポート番号 (1 or 2)\n"
         "  -r                 常駐解除\n"
         "  -c                 設定ファイルを生成する\n"
         "  -v                 詳細表示\n"
@@ -331,7 +221,6 @@ static void help(void)
         "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
         "  -d<dhcp mode>      DHCP使用モード (0:使用しない / 1:使用する) (default: 1)\n"
         "  -h<host name>      DHCP使用時のホスト名 (default: なし)\n"
-        "  -m<phy mode>       PHY接続モード指定 (auto(default)/10h/10f/100h/100f/100h_an)\n"
     );
     exit(1);
 }
@@ -342,21 +231,13 @@ static void help(void)
 
 int main(int argc, char **argv)
 {
-    _dos_print("X680x0 Ethernet Joy-kun Network driver (version " GIT_REPO_VERSION ")\r\n");
+    _dos_print("X680x0 WiFi Pileder Network driver for PilederX (version " GIT_REPO_VERSION ")\r\n");
 
     if (parse_cmdline(argc, argv) < 0) {
         help();
     }
 
     if (opt_c) {
-        if (joy_port == NOSPEC_INT) {
-            _dos_print("-j オプションでジョイスティックポート番号を指定してください\r\n");
-            return 1;
-        }
-        if ((phymode_val = parse_phy_mode(phymode)) < 0) {
-            _dos_print("PHY接続モードの指定が不正です\r\n");
-            return 1;
-        }
         if (create_config(cfgfile) < 0) {
             return 1;
         }
@@ -367,31 +248,28 @@ int main(int argc, char **argv)
     if (opt_r) {
         _dos_super(0);
 
-        struct dos_devheader *prev = find_devheader("/joynet/");
+        struct dos_devheader *prev = find_devheader("/winet//");
         if (prev == NULL) {
-            _dos_print("joynetd は常駐していません\r\n");
+            _dos_print("winetd は常駐していません\r\n");
             return 0;
         }
 
-        struct joynetd_data *data = prev->next->data;
-        if (data->magic != JOYNET_MAGIC) {
-            _dos_print("常駐している joynetd のバージョンが異なります\r\n");
+        struct winetd_data *data = prev->next->data;
+        if (data->magic != WINET_MAGIC) {
+            _dos_print("常駐している winetd のバージョンが異なります\r\n");
             return 1;
         }
 
-        w5500_select(data->joyport);
-
+#if 0
         w5500_ini();
         w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
-        usleep(W5500_PHY_RESET_WAIT_US);
-        w5500_fin();
+#endif
 
         if (data->vectno != 0) {
             _dos_intvcs(data->vectno, data->oldvect);
         }
-        _dos_intvcs(0x013b, data->oldvect_joy);
         prev->next = prev->next->next;
-        _dos_print("joynetd を常駐解除しました\r\n");
+        _dos_print("winetd を常駐解除しました\r\n");
         _dos_mfree(data->memblock);
         return 0;
     }
@@ -411,9 +289,6 @@ int main(int argc, char **argv)
     if (hostname == NOSPEC_STR) {
         hostname = DEFAULT_HOSTNAME;
     }
-    if (phymode == NOSPEC_STR) {
-        phymode = DEFAULT_PHYMODE;
-    }
 
     if (read_config(cfgfile) < 0) {
         return 1;
@@ -421,21 +296,11 @@ int main(int argc, char **argv)
 
     parse_cmdline(argc, argv);  // 設定をコマンドライン引数で上書き
 
-    if (joy_port == NOSPEC_INT) {
-        _dos_print("-j オプションでジョイスティックポート番号を指定してください\r\n");
-        return 1;
-    }
-    phymode_val = parse_phy_mode(phymode);
-    if (phymode_val < 0) {
-        _dos_print("PHY接続モードの指定が不正です\r\n");
-        return 1;
-    }
-
     _dos_super(0);
 
-    struct dos_devheader *prev = find_devheader("/joynet/");
+    struct dos_devheader *prev = find_devheader("/winet//");
     if (prev != NULL) {
-        _dos_print("既に joynetd が常駐しています\r\n");
+        _dos_print("既に winetd が常駐しています\r\n");
         return 0;
     }
     if (find_tcpip() != NULL) {
@@ -443,42 +308,22 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    if (joy_port < 1) {
-        // ジョイポート 1,2 の順でW5500が接続されているか確認する
-        joy_port = 1;
-        w5500_select(joy_port);
-        w5500_ini();
-        w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
-        usleep(W5500_PHY_RESET_WAIT_US);
-        if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
-            joy_port = 2;
-        }
-        w5500_fin();
-    }
-
-    w5500_select(joy_port);
     w5500_ini();
 
+#if 0
     w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
     usleep(W5500_PHY_RESET_WAIT_US);
     if (w5500_read_b(W5500_VERSIONR, 0) != 0x04) {
-        printf("ポート %d にイーサネットじょい君が接続されていません\n", joy_port);
-        w5500_fin();
+//        printf("ポート %d にイーサネットじょい君が接続されていません\n", joy_port);
         return 1;
     }
-
-    dump_phycfgr();
-    w5500_apply_phymode(phymode_val);
-    if (!w5500_wait_for_link(W5500_LINK_WAIT_MS)) {
-        printf("LANケーブルが接続されていません\n");
-    }
-    dump_phycfgr();
+#endif
 
     init_etc_files();
-    set_config();
+//    set_config();
     set_ifenable(ifenable);
 
-    int dhcp_result = -1;
+#if 0
     if (dhcp_mode) {
         _dos_print("ネットワーク設定をDHCPで取得しています...\r\n");
         dhcp_result = idhcp_request(opt_v, ifname);
@@ -488,13 +333,9 @@ int main(int argc, char **argv)
             _dos_print("DHCPリースの取得に成功しました\r\n");
         }
     }
+#endif
 
-    show_config(dhcp_result == NOERROR ? -1 : 0);
-
-    w5500_fin();
-
-    joyget_stat = 0x4b00 + joy_port;
-    joyget_port = joy_port - 1;
+    show_config(-1);
 
     if (trap_number < -1) {    // 未使用のtrap番号を探す
         for (trap_number = 0; trap_number < 8; trap_number++) {
@@ -512,20 +353,17 @@ int main(int argc, char **argv)
             return 1;
         }
         extern int trap_entry(void);
-        joynetd_data.vectno = trap_number + 0x20;
-        joynetd_data.oldvect = _dos_intvcs(joynetd_data.vectno, trap_entry);
+        winetd_data.vectno = trap_number + 0x20;
+        winetd_data.oldvect = _dos_intvcs(winetd_data.vectno, trap_entry);
     }
-    PRINTF("joynetd: using trap number %d\n", trap_number);
+    PRINTF("winetd: using trap number %d\n", trap_number);
 
-    joynetd_data.memblock = _dos_getpdb();
-    joynetd_data.oldvect_joy = _dos_intvcs(0x013b, joyget);
-    joynetd_data.joyport = joy_port;
-    joyget_org = joynetd_data.oldvect_joy;
+    winetd_data.memblock = _dos_getpdb();
 
     prev = find_devheader(NULL);
     prev->next = &devheader;
 
-    _dos_print("joynetd が常駐しました\r\n");
+    _dos_print("winetd が常駐しました\r\n");
 
     // ヒープ領域の末尾までを常駐して終了する
     // (ヒープの後ろにあるスタック領域は常駐しない)

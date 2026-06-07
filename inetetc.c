@@ -38,7 +38,7 @@
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
 
-#include "joynetd.h"
+#include "winetd.h"
 
 //****************************************************************************
 // Macros and definitions

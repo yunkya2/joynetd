@@ -36,7 +36,7 @@
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
 
-#include "joynetd.h"
+#include "winetd.h"
 
 //****************************************************************************
 // Macros and definitions
@@ -66,12 +66,12 @@ static uint8_t w5500_mac[6];
 
 static int config_flags = 0;
 
-extern const char joynetd_cfg_tmpl[];
+extern const char winetd_cfg_tmpl[];
 
 __asm__ (
     ".section .rodata\n"
-    "joynetd_cfg_tmpl:\n"
-    ".incbin \"joynetd.cfg.tmpl.txt\"\n"
+    "winetd_cfg_tmpl:\n"
+    ".incbin \"winetd.cfg.tmpl.txt\"\n"
     ".previous\n"
 );
 
@@ -109,7 +109,7 @@ static char *get_default_cfgfile(char *buf)
     // Use default config file path based on executable path
     struct dos_psp *psp = _dos_getpdb();
     strcpy(buf, psp->exe_path);
-    strcat(buf, "joynetd.cfg");
+    strcat(buf, "winetd.cfg");
     return buf;
 }
 
@@ -128,7 +128,7 @@ int read_config(const char *cfgfile)
 
     if ((fp = fopen(cfgfile, "r")) == NULL) {
         _dos_print("設定ファイルが見つかりません\r\n"
-                   "joynetd -c で設定ファイルを生成してください\r\n");
+                   "winetd -c で設定ファイルを生成してください\r\n");
         return -1;
     }
 
@@ -138,12 +138,7 @@ int read_config(const char *cfgfile)
     char *p;
     char *q;
     while (fgets(line, sizeof(line), fp) != NULL) {
-        if (strncasecmp(line, "port=", 5) == 0) {
-            v = atoi(&line[5]);
-            if (v <= 2) {
-                joy_port = v;
-            }
-        } else if (strncasecmp(line, "trap=", 5) == 0) {
+        if (strncasecmp(line, "trap=", 5) == 0) {
             v = atoi(&line[5]);
             if (v < 8) {
                 trap_number = v;
@@ -169,16 +164,6 @@ int read_config(const char *cfgfile)
                 hostname = malloc(len + 1);
                 if (hostname) {
                     strcpy(hostname, n);
-                }
-            }
-        } else if (strncasecmp(line, "phymode=", 8) == 0) {
-            char *n = &line[8];
-            size_t len = strlen(n);
-            if (len > 0 && n[len - 1] == '\n') {
-                n[len - 1] = '\0';
-                phymode = malloc(len + 1);
-                if (phymode) {
-                    strcpy(phymode, n);
                 }
             }
         } else if (strncasecmp(line, "mac=", 4) == 0) {
@@ -249,10 +234,8 @@ int create_config(const char *cfgfile)
         _dos_print("設定ファイルの生成に失敗しました\r\n");
         return -1;
     } else {
-        fprintf(fp, joynetd_cfg_tmpl,
+        fprintf(fp, winetd_cfg_tmpl,
                 mactoa(w5500_mac),
-                joy_port == NOSPEC_INT ? ";" : "",
-                joy_port == NOSPEC_INT ? DEFAULT_PORT : joy_port,
                 trap_number == NOSPEC_INT ? ";" : "",
                 trap_number == NOSPEC_INT ? DEFAULT_TRAP : trap_number,
                 ifname == NOSPEC_STR ? ";" : "",
@@ -260,9 +243,7 @@ int create_config(const char *cfgfile)
                 dhcp_mode == NOSPEC_INT ? ";" : "",
                 dhcp_mode == NOSPEC_INT ? DEFAULT_DHCP : dhcp_mode,
                 hostname == NOSPEC_STR ? ";" : "",
-                hostname == NOSPEC_STR ? "" : hostname,
-                phymode == NOSPEC_STR ? ";" : "",
-                phymode == NOSPEC_STR ? DEFAULT_PHYMODE : phymode
+                hostname == NOSPEC_STR ? "" : hostname
         );
         fclose(fp);
     }
@@ -273,7 +254,7 @@ int create_config(const char *cfgfile)
 void set_config(void)
 {
     if (!(config_flags & FLAG_MAC)) {
-        printf("※ joynetd.cfg にMACアドレスの指定がないため、ランダムなアドレスを生成します\n");
+        printf("※ winetd.cfg にMACアドレスの指定がないため、ランダムなアドレスを生成します\n");
         generate_random_mac();
     }
 

@@ -38,7 +38,7 @@
 #include <x68k/iocs.h>
 
 #include "tcpipdrv.h"
-#include "joynetd.h"
+#include "winetd.h"
 
 //****************************************************************************
 // Macros and definitions
@@ -84,8 +84,6 @@ typedef struct usock
 
 #define EPH_PORT_BEGIN   0xc000
 #define EPH_PORT_END     0xd000
-
-#define W5500_SOCK_BUF_SIZE   2048
 
 #define SOCKFD_SOCKET       0   // fd for all socket
 #define SOCKFD_RDWR         1   // fd for send()/recv()
@@ -1113,8 +1111,6 @@ int do_command(void)
 
 //    PRINTF("joynetd: do_command cmd=%d arg=%p\r\n", cmd, arg);
 
-    w5500_ini();
-
     switch (cmd) {
     case -1:        // trap番号の取得
         res = trap_number;
@@ -1321,8 +1317,6 @@ int do_command(void)
     default:
         break;
     }
-
-    w5500_fin();
 
     return res;
 }

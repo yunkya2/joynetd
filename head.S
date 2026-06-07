@@ -32,7 +32,7 @@
     .extern do_command
 
 tcpip_magic:
-    .ascii  "TCP/IP\x02\x00"
+    .ascii  "TCP/IP\x03\x00"
 
 jsr_entry:
     pea.l   %pc@(do_command)
@@ -48,16 +48,16 @@ trap_entry:
 /* Human68k device driver header */
 
     .global devheader
-    .extern joynetd_data
+    .extern winetd_data
 
 devheader:
     .long   -1                  // link pointer
     .word   0x8000              // device type
     .long   strategy            // strategy routine entry point
     .long   interrupt_asm       // interrupt routine entry point
-    .ascii  "/joynet/"          // device name
+    .ascii  "/winet//"          // device name
 
-    .long   joynetd_data        // device data pointer
+    .long   winetd_data         // device data pointer
 
 reqheader:  .long 0
 
@@ -75,34 +75,6 @@ interrupt_asm:
     move.b  %d0,%a5@(3)             // errl エラーコードを設定
     movem.l %sp@+,%d0-%d2/%a0-%a2/%a5
     rts
-
-
-/* IOCS _JOYGET handler */
-
-    .global joyget
-    .global joyget_stat
-    .global joyget_port
-    .global joyget_org
-
-joyget:
-    cmpi.w  #0x4b00,%d1
-    beq.s   5f
-    cmp.w   joyget_port,%d1
-    beq.s   6f
-    move.l  %pc@(joyget_org),%sp@-
-    rts
-
-5:
-    moveq.l #0,%d0
-    move.w  %pc@(joyget_stat),%d0
-    rts
-6:
-    move.l  #0x00ff,%d0
-    rts
-
-joyget_stat:   .word  0
-joyget_port:   .word  0
-joyget_org:    .long  0
 
 
 /* C startup routine */

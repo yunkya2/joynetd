@@ -22,8 +22,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef _JOYNETD_H_
-#define _JOYNETD_H_
+#ifndef _WINETD_H_
+#define _WINETD_H_
 
 //#define DEBUG
 
@@ -38,18 +38,15 @@
 #include <netdb.h>
 
 #include "network.h"
-#include "w5500.h"
-#include "idhcpc/idhcpc.h"
+#include "w55pileder.h"
 
 #define NOSPEC_INT      -99999
 #define NOSPEC_STR      NULL
 
-#define DEFAULT_PORT        0
 #define DEFAULT_TRAP        -2
 #define DEFAULT_IFNAME      "en0"
 #define DEFAULT_DHCP        1
 #define DEFAULT_HOSTNAME    NULL
-#define DEFAULT_PHYMODE     "auto"
 
 // joynetd.c
 extern int joy_port;
@@ -57,7 +54,6 @@ extern int trap_number;
 extern char *ifname;
 extern int dhcp_mode;
 extern char *hostname;
-extern char *phymode;
 extern bool ifenable;
 int set_ifenable(bool enable);
 
@@ -140,4 +136,4 @@ int create_config(const char *cfgfile);
 void set_config(void);
 void show_config(int mask);
 
-#endif /* _JOYNETD_H_ */
+#endif /* _WINETD_H_ */

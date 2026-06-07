@@ -39,11 +39,10 @@ LDFLAGS += -Wl,-Map,$(@:.x=.map) -specs=nano.specs
 INC += -I.
 DEFS +=
 
-TARGET = joynetd.x
-OBJS += head.o joynetd.o inetconfig.o inetcmd.o inetiface.o inetdns.o inetroute.o inetetc.o w5500.o
-OBJS += idhcpc/idhcpc.o
-OBJS += idhcpc/dhcp.o
-OBJS += idhcpc/nwsub.o
+TARGET = winetd.x
+OBJS += head.o winetd.o
+OBJS += inetconfig.o inetcmd.o inetiface.o inetdns.o inetroute.o inetetc.o
+OBJS += w55pileder.o
 LIBS += -lsocket
 
 all: $(TARGET)
@@ -59,17 +58,17 @@ $(TARGET): $(OBJS)
 
 DEPS = $(OBJS:.o=.d)
 
-inetconfig.o: joynetd.cfg.tmpl.txt
+inetconfig.o: winetd.cfg.tmpl.txt
 
-joynetd.cfg.tmpl.txt: joynetd.cfg.tmpl
+winetd.cfg.tmpl.txt: winetd.cfg.tmpl
 	iconv -f utf-8 -t cp932 $^ > $@
 
 clean:
-	-rm -f $(OBJS) $(DEPS) *.x *.elf* *.map *.d *.o joynetd.cfg joynetd.cfg.tmpl.txt README.txt
+	-rm -f $(OBJS) $(DEPS) *.x *.elf* *.map *.d *.o winetd.cfg winetd.cfg.tmpl.txt README.txt
 
 release: clean all
 	./md2txtconv.py README.md
-	zip -r joynetd-$(GIT_REPO_VERSION) README.txt joynetd.x
+	zip -r winetd-$(GIT_REPO_VERSION) README.txt winetd.x
 
 -include $(DEPS)
 
