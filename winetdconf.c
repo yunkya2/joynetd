@@ -52,20 +52,63 @@
 // Private functions
 //****************************************************************************
 
+char *getpass(const char *prompt)
+{
+  static char password[32];
+  char *p = password;
+
+  printf("%s", prompt);
+  fflush(stdout);
+  while (1) {
+    int ch = _iocs_b_keyinp() & 0xff;
+    switch (ch) {
+    case '\0':
+      continue;
+    case '\r':
+    case '\n':
+      *p = '\0';
+      printf("\n");
+      return password;
+    case '\b':
+      if (p > password) {
+        p--;
+        printf("\b \b");
+        fflush(stdout);
+      }
+      break;
+    case '\x03':  // Ctrl-C
+    case '\x1b':  // ESC
+      printf("\n");
+      return NULL;
+    case '\x17':  // Ctrl-W
+    case '\x15':  // Ctrl-U
+      while (p > password && *(p - 1) != ' ') {
+        p--;
+        printf("\b \b");
+        fflush(stdout);
+      }
+      break;
+    default:
+      if (p - password < sizeof(password) - 1 &&
+          ch >= 32 && ch <= 126) {
+        *p++ = (char)ch;
+        printf("*");
+        fflush(stdout);
+      }
+      break;
+    }
+  }
+}
+
 //****************************************************************************
 // Program entry
 //****************************************************************************
 
 int main(int argc, char **argv)
 {
-
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        printf("socket error\n");
-        return 1;
+    if (wifi_init() < 0) {
+        printf("winetdが常駐していません\n");
     }
-
-    // winetd常駐確認
 
     char *cmd = "";
     if (argc > 1) {
@@ -89,6 +132,12 @@ int main(int argc, char **argv)
     } else if (strcmp(cmd, "leave") == 0) {
         wifi_leave();
     } else if (strcmp(cmd, "scan") == 0) {
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+            printf("socket error\n");
+            return 1;
+        }
+
         wifi_scan(fd);
 
         wifi_scan_result_t result;
@@ -105,11 +154,11 @@ int main(int argc, char **argv)
             }
             usleep(100 * 1000);
         }
+
+        close(fd);
     } else {
         printf("RSSI=%ddBm\n", -wifi_getrssi());
     }
-
-    close(fd);
 
     return 0;
 }
