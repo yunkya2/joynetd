@@ -804,7 +804,9 @@ int do_close(int sockfd)
         }
     } else {
         usock_listening &= ~(1 << sno);
-        w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+        if (u->rdysock) {
+            w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_CLOSE);
+        }
     }
     u->type = NOTUSED;
     return 0;
