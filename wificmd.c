@@ -154,6 +154,7 @@ int do_wifi_join(char *ssid, char *password, long auth)
 int do_wifi_leave(void)
 {
     wifi_command(W5500_WCR_LEAVE);
+    ifenable = false;
     return 0;
 }
 
