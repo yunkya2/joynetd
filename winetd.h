@@ -33,6 +33,7 @@
 #define PRINTF(...)
 #endif
 
+#include <stdint.h>
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -50,13 +51,22 @@
 #define DEFAULT_DHCP        1
 #define DEFAULT_HOSTNAME    NULL
 
+#define WINETD_CFGF_TRAP        (1U << 0)
+#define WINETD_CFGF_IFNAME      (1U << 1)
+#define WINETD_CFGF_SSID        (1U << 2)
+#define WINETD_CFGF_PASSWD      (1U << 3)
+#define WINETD_CFGF_DHCP        (1U << 4)
+#define WINETD_CFGF_HOSTNAME    (1U << 5)
+
 // winetd.c
 extern int trap_number;
+extern int trap_config_number;
 extern char *ifname;
 extern char wifi_ssid[32 + 1];
 extern char wifi_passwd[64 + 1];
 extern int dhcp_mode;
 extern char *hostname;
+extern uint32_t winetd_cfg_flags;
 extern bool ifenable;
 int set_ifenable(bool enable);
 

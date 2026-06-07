@@ -73,11 +73,13 @@ struct winetd_data winetd_data = {
 
 char *cfgfile = NULL;
 int trap_number = NOSPEC_INT;
+int trap_config_number = NOSPEC_INT;
 char *ifname = NOSPEC_STR;
 char wifi_ssid[32 + 1];
 char wifi_passwd[64 + 1];
 int dhcp_mode = NOSPEC_INT;
 char *hostname = NOSPEC_STR;
+uint32_t winetd_cfg_flags = 0;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
@@ -209,12 +211,15 @@ static int parse_cmdline(int argc, char **argv)
                     return -1;
                 }
                 trap_number = v;
+                trap_config_number = v;
+                winetd_cfg_flags |= WINETD_CFGF_TRAP;
                 break;
             case 'i':
                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
                     return -1;
                 }
                 ifname = p;
+                winetd_cfg_flags |= WINETD_CFGF_IFNAME;
                 break;
             case 's':
                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
@@ -232,6 +237,9 @@ static int parse_cmdline(int argc, char **argv)
                     strncpy(wifi_passwd, passwd, 64);
                     wifi_passwd[64] = '\0';
 
+                    winetd_cfg_flags |= WINETD_CFGF_SSID;
+                    winetd_cfg_flags |= WINETD_CFGF_PASSWD;
+
                     i++;    // パスワード引数を消費
                 }
                 break;
@@ -244,12 +252,14 @@ static int parse_cmdline(int argc, char **argv)
                     return -1;
                 }
                 dhcp_mode = v;
+                winetd_cfg_flags |= WINETD_CFGF_DHCP;
                 break;
             case 'h':
                 if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
                     return -1;
                 }
                 hostname = p;
+                winetd_cfg_flags |= WINETD_CFGF_HOSTNAME;
                 break;
             default:
                 return -1;

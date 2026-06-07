@@ -111,8 +111,8 @@ int read_config(const char *cfgfile)
 
     if ((fp = fopen(cfgfile, "r")) == NULL) {
         _dos_print("設定ファイルが見つかりません\r\n"
-                   "winetdconf -c で設定ファイルを生成してください\r\n");
-        return -1;
+                   "winetdconf connect -c で設定ファイルを生成してください\r\n");
+        return 0;
     }
 
     // Read config file line by line
@@ -125,6 +125,8 @@ int read_config(const char *cfgfile)
             v = atoi(&line[5]);
             if (v < 8) {
                 trap_number = v;
+                trap_config_number = v;
+                winetd_cfg_flags |= WINETD_CFGF_TRAP;
             }
         } else if (strncasecmp(line, "ifname=", 7) == 0) {
             char *n = &line[7];
@@ -134,6 +136,7 @@ int read_config(const char *cfgfile)
                 ifname = malloc(len + 1);
                 if (ifname) {
                     strcpy(ifname, n);
+                    winetd_cfg_flags |= WINETD_CFGF_IFNAME;
                 }
             }
         } else if (strncasecmp(line, "ssid=", 5) == 0) {
@@ -151,6 +154,7 @@ int read_config(const char *cfgfile)
                 }
                 strncpy(wifi_ssid, n, 32);
                 wifi_ssid[32] = '\0';
+                winetd_cfg_flags |= WINETD_CFGF_SSID;
             }
         } else if (strncasecmp(line, "passwd=", 7) == 0) {
             char *n = &line[7];
@@ -159,10 +163,12 @@ int read_config(const char *cfgfile)
                 n[len - 1] = '\0';
                 strncpy(wifi_passwd, n, 64);
                 wifi_passwd[64] = '\0';
+                winetd_cfg_flags |= WINETD_CFGF_PASSWD;
             }
         } else if (strncasecmp(line, "dhcp=", 5) == 0) {
             v = atoi(&line[5]);
             dhcp_mode = (v == 0) ? 0 : 1;
+            winetd_cfg_flags |= WINETD_CFGF_DHCP;
         } else if (strncasecmp(line, "hostname=", 9) == 0) {
             char *n = &line[9];
             size_t len = strlen(n);
@@ -171,6 +177,7 @@ int read_config(const char *cfgfile)
                 hostname = malloc(len + 1);
                 if (hostname) {
                     strcpy(hostname, n);
+                    winetd_cfg_flags |= WINETD_CFGF_HOSTNAME;
                 }
             }
         } else if (strncasecmp(line, "ip=", 3) == 0) {

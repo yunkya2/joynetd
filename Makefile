@@ -72,6 +72,8 @@ DEPS = $(OBJS:.o=.d)
 
 inetconfig.o: winetd.cfg.tmpl.txt
 
+winetdconf.o: winetd.cfg.tmpl.txt
+
 winetd.cfg.tmpl.txt: winetd.cfg.tmpl
 	iconv -f utf-8 -t cp932 $^ > $@
 

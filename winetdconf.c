@@ -49,15 +49,35 @@
 
 #define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
 
+// TBD
+#define NOSPEC_INT      -99999
+#define NOSPEC_STR      NULL
+
+#define DEFAULT_TRAP        -2
+#define DEFAULT_IFNAME      "en0"
+#define DEFAULT_SSIDPASS    NULL
+#define DEFAULT_DHCP        1
+#define DEFAULT_HOSTNAME    NULL
+
 //****************************************************************************
 // Global variables
 //****************************************************************************
+
+extern const char winetd_cfg_tmpl[];
+
+__asm__ (
+    ".section .rodata\n"
+    "winetd_cfg_tmpl:\n"
+    ".incbin \"winetd.cfg.tmpl.txt\"\n"
+    ".byte 0\n"
+    ".previous\n"
+);
 
 //****************************************************************************
 // Private functions
 //****************************************************************************
 
-char *getpass(const char *prompt)
+static char *readpass(const char *prompt)
 {
     static char password[64 + 1];
     char *p = password;
@@ -116,10 +136,6 @@ char *getpass(const char *prompt)
     }
 }
 
-//****************************************************************************
-// Command functions
-//****************************************************************************
-
 static char *mactoa(const uint8_t *mac)
 {
     static char buf[18];
@@ -127,6 +143,61 @@ static char *mactoa(const uint8_t *mac)
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     return buf;
 }
+
+static char *get_default_cfgfile(char *buf)
+{
+    // Use default config file path based on executable path
+    struct dos_psp *psp = _dos_getpdb();
+    strcpy(buf, psp->exe_path);
+    strcat(buf, "winetd.cfg");
+    return buf;
+}
+
+static int create_config(const char *cfgfile)
+{
+    char cfgdefault[256];
+    FILE *fp;
+    wifi_winetd_config_t config;
+
+    if (cfgfile == NULL || *cfgfile == '\0') {
+        cfgfile = get_default_cfgfile(cfgdefault);
+    }
+
+    if ((fp = fopen(cfgfile, "r")) != NULL) {
+        printf("設定ファイル %s は既に存在します\n", cfgfile);
+        fclose(fp);
+        return -1;
+    }
+
+    wifi_get_winetd_config(&config);
+
+    if ((fp = fopen(cfgfile, "w")) == NULL) {
+        printf("設定ファイル %s の生成に失敗しました\n", cfgfile);
+        return -1;
+        } else {
+        fprintf(fp, winetd_cfg_tmpl,
+            config.trap_number == NOSPEC_INT ? ";" : "",
+            config.trap_number == NOSPEC_INT ? DEFAULT_TRAP : config.trap_number,
+            config.ifname == NOSPEC_STR ? ";" : "",
+            config.ifname == NOSPEC_STR ? DEFAULT_IFNAME : config.ifname,
+            config.ssid == NOSPEC_STR ? ";" : "",
+            config.ssid == NOSPEC_STR ? "" : config.ssid,
+            config.password == NOSPEC_STR ? ";" : "",
+            config.password == NOSPEC_STR ? "" : config.password,
+            config.dhcp_mode == NOSPEC_INT ? ";" : "",
+            config.dhcp_mode == NOSPEC_INT ? 1 : config.dhcp_mode,
+            config.hostname == NOSPEC_STR ? ";" : "",
+            config.hostname == NOSPEC_STR ? "" : config.hostname
+        );
+        fclose(fp);
+    }
+    printf("設定ファイル %s を生成しました\n", cfgfile);
+    return 0;
+}
+
+//****************************************************************************
+// Command functions
+//****************************************************************************
 
 static int do_show_stat(void)
 {
@@ -154,16 +225,6 @@ static int do_show_stat(void)
         printf("%-32s", buf);
         printf("\n");
     }
-
-    wifi_winetd_config_t config;
-
-    wifi_get_winetd_config(&config);
-    printf("trap_number: %d\n", config.trap_number);
-    printf("ifname: %s\n", config.ifname);
-    printf("ssid: %s\n", config.ssid);
-    printf("password: %s\n", config.password);
-    printf("dhcp_mode: %d\n", config.dhcp_mode);
-    printf("hostname: %s\n", config.hostname ? config.hostname : "(null)");
 
     return 0;
 }
@@ -279,7 +340,7 @@ static int do_wifi_join(int argc, char **argv)
         int top_ssid = 0;
         int num_ssid = 0;
 
-        printf("SSIDが指定されていないためアクセスポイントをスキャンします...\n");
+        printf("アクセスポイントをスキャンします...\n");
         res = do_wifi_scan(verbose_opt ? 1 : 0, verbose_opt, &ssid_list,
                            &num_ssid, &top_ssid);
         if (res < 0) {
@@ -305,8 +366,8 @@ static int do_wifi_join(int argc, char **argv)
         }
 
         if (!nopasswd) {
-            printf("SSID %s のパスワードを入力: ", ssid);
-            passwd = getpass("");
+            printf("%s のパスワードを入力: ", ssid);
+            passwd = readpass("");
             if (passwd == NULL) {
                 return -1;
             }
@@ -343,6 +404,12 @@ static int do_wifi_join(int argc, char **argv)
     }
     if (stat & W5500_WSR_JOINED) {
         printf("WiFiに接続しました\n");
+        do_show_stat();
+        if (createconfig) {
+            if (create_config(confpath) < 0) {
+                return -1;
+            }
+        }
     } else if (stat & W5500_WSR_ERR) {
         if (stat & W5500_WSR_NONET) {
             printf("アクセスポイントが見つかりません\n");
@@ -389,6 +456,7 @@ int main(int argc, char **argv)
 
     if (wifi_init() < 0) {
         printf("winetdが常駐していません\n");
+        return 1;
     }
 
     if (argc <= 1 || strcmp(argv[1], "stat") == 0) {

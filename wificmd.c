@@ -139,6 +139,8 @@ int do_wifi_join(char *ssid, char *password, long auth)
     wifi_ssid[32] = '\0';
     memcpy(wifi_passwd, password, 64);
     wifi_passwd[64] = '\0';
+    winetd_cfg_flags |= WINETD_CFGF_SSID;
+    winetd_cfg_flags |= WINETD_CFGF_PASSWD;
     w5500_write(W5500_WSSID, 0, (uint8_t *)ssid, 32);
     w5500_write(W5500_WPASSWORD, 0, (uint8_t *)password, 64);
     if (auth >= 0) {
@@ -177,12 +179,18 @@ struct iface *do_wifi_get_iface(struct route **rt, struct dns **dns)
 
 int do_wifi_get_winetd_config(wifi_winetd_config_t *config)
 {
-    config->trap_number = trap_number;
-    config->ifname = ifname;
-    config->ssid = wifi_ssid;
-    config->password = wifi_passwd;
-    config->dhcp_mode = dhcp_mode;
-    config->hostname = hostname;
+    config->trap_number =
+        (winetd_cfg_flags & WINETD_CFGF_TRAP) ? trap_config_number : NOSPEC_INT;
+    config->ifname =
+        (winetd_cfg_flags & WINETD_CFGF_IFNAME) ? ifname : NOSPEC_STR;
+    config->ssid =
+        (winetd_cfg_flags & WINETD_CFGF_SSID) ? wifi_ssid : NOSPEC_STR;
+    config->password =
+        (winetd_cfg_flags & WINETD_CFGF_PASSWD) ? wifi_passwd : NOSPEC_STR;
+    config->dhcp_mode =
+        (winetd_cfg_flags & WINETD_CFGF_DHCP) ? dhcp_mode : NOSPEC_INT;
+    config->hostname =
+        (winetd_cfg_flags & WINETD_CFGF_HOSTNAME) ? hostname : NOSPEC_STR;
 
     return 0;
 }
