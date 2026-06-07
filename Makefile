@@ -51,7 +51,7 @@ DEFS +=
 TARGET = winetd.x
 OBJS += head.o winetd.o
 OBJS += inetconfig.o inetcmd.o inetiface.o inetdns.o inetroute.o inetetc.o
-OBJS += w55pileder.o
+OBJS += w55pileder.o wificmd.o
 LIBS += -lsocket
 
 all: $(TARGET) winetdconf.x

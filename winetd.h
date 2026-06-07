@@ -89,6 +89,7 @@ char *do_sockerr(int sockfd);
 char *do_sockstate(int sockfd);
 int do_command(void);
 
+// wificmd.c
 int do_wifi_getrssi(void);
 int do_wifi_getstat(void);
 int do_wifi_scan(int sockfd);
