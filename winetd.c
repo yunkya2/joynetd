@@ -214,11 +214,10 @@ static void help(void)
         "使用法: winetd [-j<port number>] [オプション]\n"
         "オプション:\n"
         "  -r                 常駐解除\n"
-        "  -c                 設定ファイルを生成する\n"
-        "  -v                 詳細表示\n"
         "  -f<config file>    設定ファイルのパスを指定する\n"
         "  -t<trap number>    APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
+        "  -s<SSID>[%%<pass>]  接続するWiFiのSSIDとパスワード (default: 自動接続しない)\n"
         "  -d<dhcp mode>      DHCP使用モード (0:使用しない / 1:使用する) (default: 1)\n"
         "  -h<host name>      DHCP使用時のホスト名 (default: なし)\n"
     );

@@ -25,8 +25,13 @@
 #ifndef _WINETDCMD_H_
 #define _WINETDCMD_H_
 
-#define WTI_GETRSSI     100
-#define WTI_SCAN        101
-#define WTI_SCANRESULT  102
+enum {
+  WTI_GETSTAT = 100,
+  WTI_GETRSSI,
+  WTI_SCAN,
+  WTI_SCANRESULT,
+  WTI_JOIN,
+  WTI_LEAVE,
+};
 
 #endif /* _WINETDCMD_H_ */

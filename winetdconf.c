@@ -71,40 +71,59 @@ typedef struct _cyw43_ev_scan_result_t {
 
 #include <errno.h>
 
+#define check_sock_func() do { \
+    if (!__sock_func) { \
+        errno = ENOSYS; \
+        return -1; \
+    } \
+} while (0)
+
 int wifi_getrssi(void)
 {
-    if (!__sock_func) {
-        errno = ENOSYS;
-        return -1;
-    }
-
+    check_sock_func();
     return __sock_func(WTI_GETRSSI, NULL);
+}
+
+int wifi_getstat(void)
+{
+    check_sock_func();
+    return __sock_func(WTI_GETSTAT, NULL);
 }
 
 int wifi_scan(int sockfd)
 {
-    if (!__sock_func) {
-        errno = ENOSYS;
-        return -1;
-    }
-
+    check_sock_func();
     return __sock_func(WTI_SCAN, (long *)sockfd);
 }
 
 int wifi_scanresult(int sockfd, void *buf, size_t len)
 {
-    if (!__sock_func) {
-        errno = ENOSYS;
-        return -1;
-    }
+    check_sock_func();
 
     long arg[3];
-
     arg[0] = sockfd;
     arg[1] = (long)buf;
     arg[2] = len;
 
     return __sock_func(WTI_SCANRESULT, arg);
+}
+
+int wifi_join(char *ssid, char *password, uint32_t auth)
+{
+    check_sock_func();
+
+    long arg[3];
+    arg[0] = (long)ssid;
+    arg[1] = (long)password;
+    arg[2] = auth;
+
+    return __sock_func(WTI_JOIN, arg);
+}
+
+int wifi_leave(void)
+{
+    check_sock_func();
+    return __sock_func(WTI_LEAVE, 0);
 }
 
 //****************************************************************************
@@ -122,34 +141,46 @@ int main(int argc, char **argv)
 
     // winetd常駐確認
 
-    printf("RSSI=%ddBm\n", -wifi_getrssi());
+    char *cmd = "";
+    if (argc > 1) {
+        cmd = argv[1];
+    }
 
-    wifi_scan(fd);
-
-    cyw43_ev_scan_result_t result;
-    int res;
-    while ((res = wifi_scanresult(fd, &result, sizeof(result))) >= 0) {
-        if (res > 0) {
-            printf("SSID: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x, Channel: %d, Auth: %d, RSSI: %ddBm\n",
-                   result.ssid,
-                   result.bssid[0], result.bssid[1], result.bssid[2],
-                   result.bssid[3], result.bssid[4], result.bssid[5],
-                   le16toh(result.channel),
-                   result.auth_mode, 
-                   (int16_t)le16toh(result.rssi));
-#if 0
-            for (int i = 0; i < sizeof(result); i++) {
-                if (i % 16 == 0) {
-                    printf("%04x: ", i);
-                }
-                printf("%02x ", ((uint8_t *)&result)[i]);
-                if (i % 16 == 15) {
-                    printf("\n");
-                }
+    if (strcmp(cmd, "join") == 0) {
+        wifi_join(WIFI_SSID, WIFI_PASSWORD, -1);
+        for (int i = 0; i < 300; i++) {
+            int stat = wifi_getstat();
+            if ((stat & W5500_WSR_JOINED) != 0) {
+                printf("WiFi is up\n");
+                break;
             }
-#endif
+            if ((stat & W5500_WSR_ERR) != 0) {
+                printf("WiFi connection error\n");
+                break;
+            }
+            usleep(100 * 1000);
         }
-        usleep(100 * 1000);
+    } else if (strcmp(cmd, "leave") == 0) {
+        wifi_leave();
+    } else if (strcmp(cmd, "scan") == 0) {
+        wifi_scan(fd);
+
+        cyw43_ev_scan_result_t result;
+        int res;
+        while ((res = wifi_scanresult(fd, &result, sizeof(result))) >= 0) {
+            if (res > 0) {
+                printf("SSID: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x, Channel: %d, Auth: %d, RSSI: %ddBm\n",
+                       result.ssid,
+                       result.bssid[0], result.bssid[1], result.bssid[2],
+                       result.bssid[3], result.bssid[4], result.bssid[5],
+                       le16toh(result.channel),
+                       result.auth_mode, 
+                       (int16_t)le16toh(result.rssi));
+            }
+            usleep(100 * 1000);
+        }
+    } else {
+        printf("RSSI=%ddBm\n", -wifi_getrssi());
     }
 
     close(fd);

@@ -1101,6 +1101,7 @@ char *do_sockstate(int sockfd)
 static void wifi_command(uint8_t cmd)
 {
     w5500_write_b(W5500_WCR, 0, cmd);
+    // コマンドが完了するまで待つ
     while (w5500_read_b(W5500_WCR, 0) != 0)
         ;
 }
@@ -1113,8 +1114,13 @@ int do_wifi_getrssi(void)
 
 int do_wifi_getstat(void)
 {
+    uint8_t oldstat = w5500_read_b(W5500_WSR, 0);
     wifi_command(W5500_WCR_GETSTAT);
     uint8_t newstat = w5500_read_b(W5500_WSR, 0);
+    if (!(oldstat & W5500_WSR_JOINED) && (newstat & W5500_WSR_JOINED)) {
+        do_rt_add(0, 0, w5500_read_l(W5500_GAR, 0), NULL, 16, 0, 1);
+        do_dns_add(w5500_read_l(W5500_WDNSR, 0));
+    }
     return newstat;
 }
 
@@ -1162,6 +1168,24 @@ int do_wifi_scanresult(int sockfd, void *buf, size_t len)
     w5500_write_w(W5500_Sn_RX_RD, blk_sreg, ptr);
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_RECV);
     return len;
+}
+
+int do_wifi_join(char *ssid, char *password, long auth)
+{
+    w5500_write(W5500_WSSID, 0, (uint8_t *)ssid, 32);
+    w5500_write(W5500_WPASSWORD, 0, (uint8_t *)password, 64);
+    if (auth >= 0) {
+        w5500_write_l(W5500_WAUTH, 0, auth);
+    }
+
+    wifi_command(W5500_WCR_JOIN);
+    return 0;
+}
+
+int do_wifi_leave(void)
+{
+    wifi_command(W5500_WCR_LEAVE);
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1387,11 +1411,20 @@ int do_command(void)
     case WTI_GETRSSI:
         res = do_wifi_getrssi();
         break;
+    case WTI_GETSTAT:
+        res = do_wifi_getstat();
+        break;
     case WTI_SCAN:
         res = do_wifi_scan((int)arg);
         break;
     case WTI_SCANRESULT:
         res = do_wifi_scanresult((int)arg[0], (void *)arg[1], arg[2]);
+        break;
+    case WTI_JOIN:
+        res = do_wifi_join((char *)arg[0], (char *)arg[1], arg[2]);
+        break;
+    case WTI_LEAVE:
+        res = do_wifi_leave();
         break;
 
     default:
