@@ -42,7 +42,6 @@
 // Macros and definitions
 //****************************************************************************
 
-#define FLAG_MAC        (1 << 0)
 #define FLAG_IP         (1 << 1)
 #define FLAG_MASK       (1 << 2)
 #define FLAG_GW         (1 << 3)
@@ -62,10 +61,10 @@ static union inaddr w5500_gar;
 static union inaddr w5500_subr;
 static union inaddr w5500_sipr;
 static union inaddr w5500_dns;
-static uint8_t w5500_mac[6];
 
 static int config_flags = 0;
 
+#if 0
 extern const char winetd_cfg_tmpl[];
 
 __asm__ (
@@ -74,27 +73,11 @@ __asm__ (
     ".incbin \"winetd.cfg.tmpl.txt\"\n"
     ".previous\n"
 );
+#endif
 
 //****************************************************************************
 // Private functions
 //****************************************************************************
-
-static void generate_random_mac(void)
-{
-    // Generate random MAC address with locally administered bit set
-    // Use X68000 system timer as random seed
-    struct iocs_time now = _iocs_ontime();
-    unsigned long seed = now.sec + now.day;
-    
-    // Set first byte: locally administered (bit 1 = 1), unicast (bit 0 = 0)
-    w5500_mac[0] = 0x02;
-    
-    // Generate remaining 5 bytes using simple PRNG
-    for (int i = 1; i < 6; i++) {
-        seed = seed * 1103515245 + 12345;
-        w5500_mac[i] = (seed >> 16) & 0xFF;
-    }
-}
 
 static char *mactoa(const uint8_t *mac)
 {
@@ -128,7 +111,7 @@ int read_config(const char *cfgfile)
 
     if ((fp = fopen(cfgfile, "r")) == NULL) {
         _dos_print("設定ファイルが見つかりません\r\n"
-                   "winetd -c で設定ファイルを生成してください\r\n");
+                   "winetdconf -c で設定ファイルを生成してください\r\n");
         return -1;
     }
 
@@ -153,6 +136,22 @@ int read_config(const char *cfgfile)
                     strcpy(ifname, n);
                 }
             }
+        } else if (strncasecmp(line, "ssid=", 5) == 0) {
+            char *n = &line[5];
+            size_t len = strlen(n);
+            if (len > 0 && n[len - 1] == '\n') {
+                n[len - 1] = '\0';
+                strncpy(wifi_ssid, n, 32);
+                wifi_ssid[32] = '\0';
+            }
+        } else if (strncasecmp(line, "passwd=", 7) == 0) {
+            char *n = &line[7];
+            size_t len = strlen(n);
+            if (len > 0 && n[len - 1] == '\n') {
+                n[len - 1] = '\0';
+                strncpy(wifi_passwd, n, 64);
+                wifi_passwd[64] = '\0';
+            }
         } else if (strncasecmp(line, "dhcp=", 5) == 0) {
             v = atoi(&line[5]);
             dhcp_mode = (v == 0) ? 0 : 1;
@@ -166,13 +165,6 @@ int read_config(const char *cfgfile)
                     strcpy(hostname, n);
                 }
             }
-        } else if (strncasecmp(line, "mac=", 4) == 0) {
-            p = &line[4];
-            for (int i = 0; i < 6; i++) {
-                w5500_mac[i] = strtoul(p, &q, 16);
-                p = q + 1;
-            }
-            config_flags |= FLAG_MAC;
         } else if (strncasecmp(line, "ip=", 3) == 0) {
             p = &line[3];
             for (int i = 0; i < 4; i++) {
@@ -211,6 +203,7 @@ int read_config(const char *cfgfile)
     return 0;
 }
 
+#if 0
 int create_config(const char *cfgfile)
 {
     char cfgdefault[256];
@@ -250,16 +243,11 @@ int create_config(const char *cfgfile)
     _dos_print("設定ファイルを生成しました\r\n");
     return 0;
 }
+#endif
 
 void set_config(void)
 {
-    if (!(config_flags & FLAG_MAC)) {
-        printf("※ winetd.cfg にMACアドレスの指定がないため、ランダムなアドレスを生成します\n");
-        generate_random_mac();
-    }
-
     // Configure W5500 network settings
-    w5500_write(W5500_SHAR, 0, w5500_mac, 6);
     if (config_flags & FLAG_IP) {
         w5500_write_l(W5500_SIPR, 0, w5500_sipr.a);
     }
@@ -279,6 +267,7 @@ void set_config(void)
 void show_config(int mask)
 {
     char buf[80];
+    uint8_t w5500_mac[6];
 
     config_flags |= mask;
 

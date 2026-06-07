@@ -1164,6 +1164,18 @@ int do_wifi_scanresult(int sockfd, void *buf, size_t len)
     int ptr = w5500_read_w(W5500_Sn_RX_RD, blk_sreg);
 //    printf("len = %d bytes= %d ptr=%d\n", len, bytes, ptr);
     w5500_read(ptr, blk_rxbuf, (uint8_t *)buf, len);
+
+    for (int i = 0; i < len; i++) {
+        if ((i % 16) == 0) {
+            printf("%04x: ", i);
+        }
+        printf("%02x ", ((uint8_t *)buf)[i]);
+        if ((i % 16) == 15) {
+            printf("\n");
+        }
+    }
+    printf("\n");
+
     ptr += len;
     w5500_write_w(W5500_Sn_RX_RD, blk_sreg, ptr);
     w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_RECV);

@@ -34,6 +34,7 @@
 #include <x68k/iocs.h>
 
 #include "winetd.h"
+#include "winetdcmd.h"
 
 //****************************************************************************
 // Macros and definitions
@@ -75,12 +76,13 @@ struct winetd_data winetd_data = {
 char *cfgfile = NULL;
 int trap_number = NOSPEC_INT;
 char *ifname = NOSPEC_STR;
+char wifi_ssid[32 + 1];
+char wifi_passwd[64 + 1];
 int dhcp_mode = NOSPEC_INT;
 char *hostname = NOSPEC_STR;
 bool ifenable = false;
 
 static bool opt_r = false;  // -r option
-static bool opt_c = false;  // -c option
 static bool opt_v = false;  // -v option
 
 //****************************************************************************
@@ -162,9 +164,6 @@ static int parse_cmdline(int argc, char **argv)
             case 'r':
                 opt_r = true;
                 break;
-            case 'c':
-                opt_c = true;
-                break;
             case 'v':
                 opt_v = true;
                 break;
@@ -184,7 +183,25 @@ static int parse_cmdline(int argc, char **argv)
                 }
                 ifname = p;
                 break;
-            case 'd':
+            case 's':
+                if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
+                    return -1;
+                }
+                char *sep = strchr(p, '%');
+                int ssid_len = sep ? (sep - p) : strlen(p);
+                ssid_len = ssid_len > 32 ? 32 : ssid_len;
+                strncpy(wifi_ssid, p, ssid_len);
+                wifi_ssid[ssid_len] = '\0';
+                wifi_passwd[0] = '\0';
+                if (sep) {
+                    char *passwd = sep + 1;
+                    int passwd_len = strlen(passwd);
+                    passwd_len = passwd_len > 64 ? 64 : passwd_len;
+                    strncpy(wifi_passwd, passwd, passwd_len);
+                    wifi_passwd[passwd_len] = '\0';
+                }
+                break;
+             case 'd':
                  if ((i = get_arg_opt(&p, i, argc, argv)) < 0) {
                     return -1;
                 }
@@ -211,13 +228,13 @@ static int parse_cmdline(int argc, char **argv)
 static void help(void)
 {
     printf(
-        "使用法: winetd [-j<port number>] [オプション]\n"
+        "使用法: winetd [オプション]\n"
         "オプション:\n"
         "  -r                 常駐解除\n"
         "  -f<config file>    設定ファイルのパスを指定する\n"
         "  -t<trap number>    APIのtrap番号 (0～7/-1(none)/-2(auto)) (default: -2)\n"
         "  -i<interface name> 使用するネットワークインターフェース名 (default: en0)\n"
-        "  -s<SSID>[%%<pass>]  接続するWiFiのSSIDとパスワード (default: 自動接続しない)\n"
+        "  -s<ssid>[%%<pass>]  接続するWiFiのSSIDとパスワード (default: 自動接続しない)\n"
         "  -d<dhcp mode>      DHCP使用モード (0:使用しない / 1:使用する) (default: 1)\n"
         "  -h<host name>      DHCP使用時のホスト名 (default: なし)\n"
     );
@@ -230,16 +247,10 @@ static void help(void)
 
 int main(int argc, char **argv)
 {
-    _dos_print("X680x0 WiFi Pileder Network driver for PilederX (version " GIT_REPO_VERSION ")\r\n");
+    _dos_print("X680x0 WiFi+PCM Pileder Network driver for PilederX (version " GIT_REPO_VERSION ")\r\n");
 
     if (parse_cmdline(argc, argv) < 0) {
         help();
-    }
-
-    if (opt_c) {
-        if (create_config(cfgfile) < 0) {
-            return 1;
-        }
     }
 
     // 常駐解除処理
@@ -319,7 +330,7 @@ int main(int argc, char **argv)
 #endif
 
     init_etc_files();
-//    set_config();
+    set_config();
     set_ifenable(ifenable);
 
 #if 0
@@ -334,8 +345,24 @@ int main(int argc, char **argv)
     }
 #endif
 
-    do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
+    if (wifi_ssid[0] != '\0') {
+        _dos_print("WiFiに接続しています...\r\n");
+        do_wifi_join(wifi_ssid, wifi_passwd, -1);
 
+        int i = 0;
+        for (i = 0; i < 100; i++) {
+            if (do_wifi_getstat() & W5500_WSR_JOINED) {
+                _dos_print("WiFiに接続しました\r\n");
+                break;
+            }
+            usleep(100 * 1000);
+        }
+        if (i >= 100) {
+            _dos_print("WiFiへの接続に失敗しました\r\n");
+        }
+
+        do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
+    }
 
     show_config(-1);
 

@@ -45,13 +45,15 @@
 
 #define DEFAULT_TRAP        -2
 #define DEFAULT_IFNAME      "en0"
+#define DEFAULT_SSIDPASS    NULL
 #define DEFAULT_DHCP        1
 #define DEFAULT_HOSTNAME    NULL
 
-// joynetd.c
-extern int joy_port;
+// winetd.c
 extern int trap_number;
 extern char *ifname;
+extern char wifi_ssid[32 + 1];
+extern char wifi_passwd[64 + 1];
 extern int dhcp_mode;
 extern char *hostname;
 extern bool ifenable;
@@ -86,6 +88,13 @@ char *do_psocket(long *arg);
 char *do_sockerr(int sockfd);
 char *do_sockstate(int sockfd);
 int do_command(void);
+
+int do_wifi_getrssi(void);
+int do_wifi_getstat(void);
+int do_wifi_scan(int sockfd);
+int do_wifi_scanresult(int sockfd, void *buf, size_t len);
+int do_wifi_join(char *ssid, char *password, long auth);
+int do_wifi_leave(void);
 
 // inetiface.c
 struct iface;
