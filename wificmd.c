@@ -135,6 +135,10 @@ int do_wifi_scanresult(int sno, void *buf, size_t len)
 
 int do_wifi_join(char *ssid, char *password, long auth)
 {
+    memcpy(wifi_ssid, ssid, 32);
+    wifi_ssid[32] = '\0';
+    memcpy(wifi_passwd, password, 64);
+    wifi_passwd[64] = '\0';
     w5500_write(W5500_WSSID, 0, (uint8_t *)ssid, 32);
     w5500_write(W5500_WPASSWORD, 0, (uint8_t *)password, 64);
     if (auth >= 0) {
@@ -175,14 +179,6 @@ int do_wifi_get_winetd_config(wifi_winetd_config_t *config)
 {
     config->trap_number = trap_number;
     config->ifname = ifname;
-
-#if 1
-    w5500_read(W5500_WSSID, 0, (uint8_t *)wifi_ssid, 32);
-    wifi_ssid[32] = '\0';
-    w5500_read(W5500_WPASSWORD, 0, (uint8_t *)wifi_passwd, 64);
-    wifi_passwd[64] = '\0';
-#endif
-
     config->ssid = wifi_ssid;
     config->password = wifi_passwd;
     config->dhcp_mode = dhcp_mode;

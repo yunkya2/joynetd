@@ -155,6 +155,16 @@ static int do_show_stat(void)
         printf("\n");
     }
 
+    wifi_winetd_config_t config;
+
+    wifi_get_winetd_config(&config);
+    printf("trap_number: %d\n", config.trap_number);
+    printf("ifname: %s\n", config.ifname);
+    printf("ssid: %s\n", config.ssid);
+    printf("password: %s\n", config.password);
+    printf("dhcp_mode: %d\n", config.dhcp_mode);
+    printf("hostname: %s\n", config.hostname ? config.hostname : "(null)");
+
     return 0;
 }
 
