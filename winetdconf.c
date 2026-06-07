@@ -30,19 +30,24 @@
 #include <string.h>
 
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/endian.h>
 
 #include <x68k/dos.h>
 #include <x68k/iocs.h>
 
-#include "winetd.h"
+#include "network.h"
+
 #include "winetdcmd.h"
 #include "libwifi.h"
 
 //****************************************************************************
 // Macros and definitions
 //****************************************************************************
+
+#define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
 
 //****************************************************************************
 // Global variables
@@ -54,121 +59,286 @@
 
 char *getpass(const char *prompt)
 {
-  static char password[32];
-  char *p = password;
+    static char password[64 + 1];
+    char *p = password;
+    bool echo = false;
 
-  printf("%s", prompt);
-  fflush(stdout);
-  while (1) {
-    int ch = _iocs_b_keyinp() & 0xff;
-    switch (ch) {
-    case '\0':
-      continue;
-    case '\r':
-    case '\n':
-      *p = '\0';
-      printf("\n");
-      return password;
-    case '\b':
-      if (p > password) {
-        p--;
-        printf("\b \b");
-        fflush(stdout);
-      }
-      break;
-    case '\x03':  // Ctrl-C
-    case '\x1b':  // ESC
-      printf("\n");
-      return NULL;
-    case '\x17':  // Ctrl-W
-    case '\x15':  // Ctrl-U
-      while (p > password && *(p - 1) != ' ') {
-        p--;
-        printf("\b \b");
-        fflush(stdout);
-      }
-      break;
-    default:
-      if (p - password < sizeof(password) - 1 &&
-          ch >= 32 && ch <= 126) {
-        *p++ = (char)ch;
-        printf("*");
-        fflush(stdout);
-      }
-      break;
+    printf("%s", prompt);
+    fflush(stdout);
+    while (1) {
+        int ch = _iocs_b_keyinp() & 0xff;
+        switch (ch) {
+        case '\0':
+            continue;
+        case '\r':
+        case '\n':
+            *p = '\0';
+            printf("\n");
+            return password;
+        case '\b':
+            if (p > password) {
+                p--;
+                printf("\b \b");
+                fflush(stdout);
+            }
+            break;
+        case '\x03':  // Ctrl-C
+        case '\x1b':  // ESC
+            printf("\n");
+            return NULL;
+        case '\x17':  // Ctrl-W
+        case '\x15':  // Ctrl-U
+            for (int i = 0; i < p - password; i++) {
+                printf("\b \b");
+            }
+            fflush(stdout);
+            p = password;
+            break;
+        case '\x14':  // Ctrl-T
+            echo = !echo;
+            for (int i = 0; i < p - password; i++) {
+                printf("\b \b");
+            }
+            for (char *q = password; q < p; q++) {
+                putchar(echo ? *q : '*');
+            }
+            fflush(stdout);
+            break;
+        default:
+            if (p - password < sizeof(password) - 1 &&
+                ch >= 32 && ch <= 126) {
+                *p++ = (char)ch;
+                putchar(echo ? ch : '*');
+                fflush(stdout);
+            }
+            break;
+        }
     }
-  }
 }
 
 //****************************************************************************
-// Program entry
+// Command functions
 //****************************************************************************
 
-#include "network.h"
-
-int main(int argc, char **argv)
+static int do_show_stat(void)
 {
-    if (wifi_init() < 0) {
-        printf("winetdが常駐していません\n");
-    }
+    printf("RSSI=%ddBm\n", -wifi_getrssi());
 
-    char *cmd = "";
-    if (argc > 1) {
-        cmd = argv[1];
-    }
+    iface *wif = wifi_get_iface();
 
-    if (strcmp(cmd, "join") == 0) {
-        wifi_join(WIFI_SSID, WIFI_PASSWORD, -1);
-        for (int i = 0; i < 300; i++) {
-            int stat = wifi_getstat();
-            if ((stat & W5500_WSR_JOINED) != 0) {
-                printf("WiFi is up\n");
-                break;
-            }
-            if ((stat & W5500_WSR_ERR) != 0) {
-                printf("WiFi connection error\n");
-                break;
-            }
-            usleep(100 * 1000);
-        }
-    } else if (strcmp(cmd, "leave") == 0) {
-        wifi_leave();
-    } else if (strcmp(cmd, "scan") == 0) {
-        int fd = socket(AF_INET, SOCK_DGRAM, 0);
-        if (fd < 0) {
-            printf("socket error\n");
-            return 1;
-        }
-
-        wifi_scan(fd);
-
-        wifi_scan_result_t result;
-        int res;
-        while ((res = wifi_scanresult(fd, &result, sizeof(result))) >= 0) {
-            if (res > 0) {
-                printf("SSID: %s, BSSID: %02x:%02x:%02x:%02x:%02x:%02x, Channel: %d, Auth: %d, RSSI: %ddBm\n",
-                       result.ssid,
-                       result.bssid[0], result.bssid[1], result.bssid[2],
-                       result.bssid[3], result.bssid[4], result.bssid[5],
-                       le16toh(result.channel),
-                       result.auth_mode, 
-                       (int16_t)le16toh(result.rssi));
-            }
-            usleep(100 * 1000);
-        }
-
-        close(fd);
-    } else {
-        printf("RSSI=%ddBm\n", -wifi_getrssi());
-
-        iface *wif = wifi_get_iface();
-
-        printf("Interface: %s\n", wif->name);
-        printf("Status: %s\n", wif->flag & IFACE_UP ? "up" : "down");
+    printf("Interface: %s\n", wif->name);
+    printf("Status: %s\n", wif->flag & IFACE_UP ? "up" : "down");
+    if (wif->flag & IFACE_UP) {
         printf("IP addr : %s\n", inet_ntoa(*(struct in_addr *)&wif->my_ip_addr));
         printf("Netmask : %s\n", inet_ntoa(*(struct in_addr *)&wif->net_mask));
         printf("Broadcast : %s\n", inet_ntoa(*(struct in_addr *)&wif->broad_cast));
     }
 
     return 0;
+}
+
+static int do_wifi_scan(int argc, char **argv, char ***out_ssid_list)
+{
+    bool verbose = false;
+    if (argc > 0 && strcmp(argv[0], "-v") == 0) {
+        verbose = true;
+    }
+
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        printf("socket error\n");
+        return -1;
+    }
+
+    wifi_scan(fd);
+
+    wifi_scan_result_t result;
+    int res;
+    int count = 0;
+    while ((res = wifi_scanresult(fd, &result, sizeof(result))) >= 0) {
+        if (res > 0) {
+            count++;
+            if (verbose) {
+                printf("(%d) SSID:%s BSSID:%02x:%02x:%02x:%02x:%02x:%02x Channel:%d Auth:%d RSSI:%ddBm\n",
+                       count,
+                       result.ssid,
+                       result.bssid[0], result.bssid[1], result.bssid[2],
+                       result.bssid[3], result.bssid[4], result.bssid[5],
+                       le16toh(result.channel),
+                       result.auth_mode, 
+                       (int16_t)le16toh(result.rssi));
+            } else {
+                printf("(%d) SSID:%s RSSI:%ddBm\n",
+                       count,
+                       result.ssid,
+                       (int16_t)le16toh(result.rssi));
+            }
+            if (out_ssid_list != NULL) {
+                *out_ssid_list = realloc(*out_ssid_list, sizeof(char *) * (count + 1));
+                (*out_ssid_list)[count - 1] = strdup((char *)result.ssid);
+                (*out_ssid_list)[count] = NULL;
+            }
+        }
+        usleep(100 * 1000);
+    }
+
+    close(fd);
+    return 0;
+}
+
+static int do_wifi_join(int argc, char **argv)
+{
+    bool nopasswd = false;
+    bool createconfig = false;
+    char *ssid = NULL;
+    char *passwd = NULL;
+    char *confpath = NULL;
+    char **ssid_list = NULL;
+    char **verbose_opt = NULL;
+    int res;
+
+    for (int i = 0; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            switch (argv[i][1]) {
+            case 'N':
+                nopasswd = true;
+                break;
+            case 'c':
+                createconfig = true;
+                break;
+            case 'v':
+                verbose_opt = &argv[i];
+                break;
+            case 'f':
+                confpath = &argv[i][2];
+                break;
+            default:
+                printf("Unknown option: %s\n", argv[i]);
+                return -1;
+            }
+        } else if (ssid == NULL) {
+            ssid = argv[i];
+        } else if (passwd == NULL) {
+            passwd = argv[i];
+        }
+    }
+
+    if (ssid == NULL) {
+        res = do_wifi_scan(verbose_opt ? 1 : 0, verbose_opt, &ssid_list);
+        if (res < 0) {
+            return -1;
+        }
+
+        if (ssid_list != NULL) {
+            char **ssidp;
+            int max_ssid = 0;
+            for (ssidp = ssid_list; *ssidp != NULL; ssidp++)
+                max_ssid++;
+
+            printf("SSIDを選択してください (1-%d): ", max_ssid);
+            char input[16];
+            fgets(input, sizeof(input), stdin);
+            int choice = atoi(input);
+            if (choice < 1 || choice > max_ssid) {
+                printf("無効な選択です\n");
+                return -1;
+            }
+            ssid = ssid_list[choice - 1];
+
+            if (!nopasswd) {
+                printf("SSID %s のパスワードを入力: ", ssid);
+                passwd = getpass("");
+                if (passwd == NULL) {
+                    return -1;
+                }
+            } else {
+                passwd = "";
+            }
+
+#if 0
+            for (ssidp = ssid_list; *ssidp != NULL; ssidp++) {
+                free((void *)*ssidp);
+            }
+            free(ssid_list);
+#endif
+        } else {
+            printf("WiFiアクセスポイントが見つかりません\n");
+            return -1;
+        }
+    }
+
+//    printf("SSID: %s password: %s\n", ssid, passwd);
+
+//    wifi_join(WIFI_SSID, WIFI_PASSWORD, -1);
+    wifi_join(ssid, passwd, -1);
+    int t = 0;
+    int stat = 0;
+    while (t < WIFI_JOIN_TIMEOUT) {
+        stat = wifi_getstat();
+        if ((stat & W5500_WSR_JOINED) != 0) {
+            break;
+        }
+        if ((stat & W5500_WSR_ERR) != 0) {
+            break;
+        }
+        usleep(500 * 1000);
+        t += 500;
+    }
+    if (stat & W5500_WSR_JOINED) {
+        printf("WiFiに接続しました\n");
+    } else if (stat & W5500_WSR_ERR) {
+        printf("WiFiへの接続に失敗しました\n");
+    } else if (t >= WIFI_JOIN_TIMEOUT) {
+        printf("WiFiへの接続に失敗しました (timeout)\n");
+    }
+    return 0;
+}
+
+static int do_wifi_leave(void)
+{
+    wifi_leave();
+    return 0;
+}
+
+static void help(void)
+{
+    printf(
+        "winetdconf version " GIT_REPO_VERSION "\n\n"
+        "使用法: winetdconf                                      - 現在の接続状態の表示\n"
+        "        winetdconf scan                                 - アクセスポイントのスキャン\n"
+        "        winetdconf connect [オプション] [SSID] [passwd] - アクセスポイントへ接続\n"
+        "        winetdconf disconnect                           - アクセスポインタから接続断\n"
+        "オプション:\n"
+        "    -c               - 設定ファイルを生成する\n"
+        "    -f<config file>  - 設定ファイルのパスを指定する\n"
+        "    -N               - パスワードをユーザに問い合わせない\n"
+    );
+    exit(1);
+}
+
+//****************************************************************************
+// Program entry
+//****************************************************************************
+
+int main(int argc, char **argv)
+{
+    int res = 0;
+
+    if (wifi_init() < 0) {
+        printf("winetdが常駐していません\n");
+    }
+
+    if (argc <= 1 || strcmp(argv[1], "stat") == 0) {
+        res = do_show_stat();
+    } else if (strcmp(argv[1], "scan") == 0) {
+        res = do_wifi_scan(argc - 2, &argv[2], NULL);
+    } else if (strcmp(argv[1], "connect") == 0 || strcmp(argv[1], "join") == 0) {
+        res = do_wifi_join(argc - 2, &argv[2]);
+    } else if (strcmp(argv[1], "disconnect") == 0 || strcmp(argv[1], "leave") == 0) {
+        res = do_wifi_leave();
+    } else {
+        help();
+    }
+
+    return res;
 }
