@@ -56,6 +56,7 @@
 #endif
 
 #define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
+#define WIFI_JOIN_RETRY     5       // WiFi接続のリトライ回数
 
 // TBD
 #define NOSPEC_INT      -99999
@@ -400,44 +401,58 @@ static int do_wifi_join(int argc, char **argv)
 #endif
     }
 
-    printf("アクセスポイント %s に接続します...\n", ssid);
+    printf("WiFi SSID:%s に接続しています...", ssid);
+    fflush(stdout);
 
-//    printf("SSID: %s password: %s\n", ssid, passwd);
-
-//    wifi_join(WIFI_SSID, WIFI_PASSWORD, -1);
-    wifi_join(ssid, passwd, -1);
-    int t = 0;
     int stat = 0;
-    while (t < WIFI_JOIN_TIMEOUT) {
-        stat = wifi_getstat();
-        if ((stat & W5500_WSR_JOINED) != 0) {
-            break;
-        }
-        if ((stat & W5500_WSR_ERR) != 0) {
-            break;
-        }
-        usleep(500 * 1000);
-        t += 500;
-    }
-    if (stat & W5500_WSR_JOINED) {
-        printf("WiFiに接続しました\n");
-        do_show_stat();
-        if (createconfig) {
-            if (create_config(confpath) < 0) {
-                return -1;
+    int retry = 0;
+    for (retry = 0; retry < WIFI_JOIN_RETRY; retry++) {
+        wifi_join(ssid, passwd, -1);
+        int t = 0;
+        while (t < WIFI_JOIN_TIMEOUT) {
+            stat = wifi_getstat();
+            if ((stat & W5500_WSR_JOINED) || (stat & W5500_WSR_ERR)) {
+                break;
             }
+            usleep(500 * 1000);
+            t += 500;
+            putchar('.');
+            fflush(stdout);
         }
-    } else if (stat & W5500_WSR_ERR) {
-        if (stat & W5500_WSR_NONET) {
-            printf("アクセスポイントが見つかりません\n");
-        } else if (stat & W5500_WSR_BADAUTH) {
-            printf("パスワードが間違っています\n");
-        } else {
-            printf("WiFiへの接続に失敗しました\n");
+        if (stat & W5500_WSR_JOINED) {
+            printf("接続しました\n");
+            do_show_stat();
+            if (createconfig) {
+                if (create_config(confpath) < 0) {
+                    return -1;
+                }
+            }
+            break;
+        } else if (stat & W5500_WSR_ERR) {
+            if (stat & W5500_WSR_NONET) {
+                printf("アクセスポイントが見つかりません\n");
+                break;
+            } else if (stat & W5500_WSR_BADAUTH) {
+                printf("パスワードが間違っています\n");
+                break;
+            } else {
+//                printf("WiFiへの接続に失敗しました\n");
+            putchar('#');
+            fflush(stdout);
+            }
+        } else if (t >= WIFI_JOIN_TIMEOUT) {
+//            printf("WiFiへの接続にタイムアウトしました\n");
+            wifi_leave();
+            putchar('*');
+            fflush(stdout);
+            continue;
         }
-    } else if (t >= WIFI_JOIN_TIMEOUT) {
-        printf("WiFiへの接続にタイムアウトしました\n");
     }
+    if (retry >= WIFI_JOIN_RETRY) {
+        printf("WiFiへの接続に失敗しました\n");
+        return -1;
+    }
+
     return 0;
 }
 

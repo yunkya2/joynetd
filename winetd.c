@@ -59,6 +59,7 @@ struct winetd_data {
 #define WINET_MAGIC     0x57694e01  // "WiN\1"
 
 #define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
+#define WIFI_JOIN_RETRY     5       // WiFi接続のリトライ回数
 
 //****************************************************************************
 // Global variables
@@ -129,6 +130,70 @@ static void *find_tcpip(void)
     return NULL;
 }
 
+static int wifi_connect(bool verbose)
+{
+    if (wifi_ssid[0] == '\0') {
+        return -1;
+    }
+
+    int stat = 0;
+    int retry = 0;
+    for (retry = 0; retry < WIFI_JOIN_RETRY; retry++) {
+        do_wifi_join(wifi_ssid, wifi_passwd, -1);
+        int t = 0;
+        while (t < WIFI_JOIN_TIMEOUT) {
+            stat = do_wifi_getstat();
+            if ((stat & W5500_WSR_JOINED) || (stat & W5500_WSR_ERR)) {
+                break;
+            }
+            usleep(500 * 1000);
+            t += 500;
+            if (verbose) {
+                _dos_putchar('.');
+            }
+        }
+        if (stat & W5500_WSR_JOINED) {
+            if (verbose) {
+                _dos_print("接続しました\r\n");
+            }
+            break;
+        } else if (stat & W5500_WSR_ERR) {
+            if (stat & W5500_WSR_NONET) {
+                if (verbose) {
+                    _dos_print("アクセスポイントが見つかりません\r\n");
+                    return -2;
+                }
+                break;
+            } else if (stat & W5500_WSR_BADAUTH) {
+                if (verbose) {
+                    _dos_print("パスワードが間違っています\r\n");
+                    return -3;
+                }
+                break;
+            } else {
+                if (verbose) {
+                    _dos_putchar('#');
+                }
+            }
+        } else if (t >= WIFI_JOIN_TIMEOUT) {
+            do_wifi_leave();
+            if (verbose) {
+                _dos_putchar('*');
+            }
+            continue;
+        }
+    }
+    if (retry >= WIFI_JOIN_RETRY) {
+        if (verbose) {
+            _dos_print("WiFiへの接続に失敗しました\r\n");
+        }
+        return -1;
+    }
+
+    ifenable = true;
+    return 0;
+}
+
 int set_ifenable(bool enable)
 {
     if (ifenable == enable) {
@@ -136,38 +201,12 @@ int set_ifenable(bool enable)
     }
 
     if (enable) {
-        if (wifi_ssid[0] == '\0') {
-            return -1;
-        }
-
-        do_wifi_join(wifi_ssid, wifi_passwd, -1);   // TBD
-
-        int t = 0;
-        while (t < WIFI_JOIN_TIMEOUT) {
-            int stat = do_wifi_getstat();
-            if (stat & W5500_WSR_JOINED) {
-                break;
-            } else if (stat & W5500_WSR_ERR) {
-                if (stat & W5500_WSR_NONET) {
-                    return -2;
-                } else if (stat & W5500_WSR_BADAUTH) {
-                    return -3;
-                } else {
-                    return -4;
-                }
-            }
-            usleep(500 * 1000);
-            t += 500;
-        }
-        if (t >= WIFI_JOIN_TIMEOUT) {
-            return -5;
-        }
+        return wifi_connect(false);
     } else {
         do_wifi_leave();
+        ifenable = false;
+        return 0;
     }
-
-    ifenable = enable;
-    return 0;
 }
 
 static int get_arg_opt(char **opt, int index, int argc, char **argv)
@@ -394,10 +433,7 @@ int main(int argc, char **argv)
         _dos_print(wifi_ssid);
         _dos_print(" に接続しています...");
 
-        if (set_ifenable(true) < 0) {
-            _dos_print("接続に失敗しました\r\n");
-        } else {
-            _dos_print("接続しました\r\n");
+        if (wifi_connect(true) >= 0) {
             do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
             show_config(-1);
         }
