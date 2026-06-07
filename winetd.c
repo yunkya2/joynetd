@@ -335,6 +335,9 @@ int main(int argc, char **argv)
     }
 #endif
 
+    do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
+
+
     show_config(-1);
 
     if (trap_number < -1) {    // 未使用のtrap番号を探す
