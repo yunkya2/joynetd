@@ -58,9 +58,7 @@ struct winetd_data {
 
 #define WINET_MAGIC     0x57694e01  // "WiN\1"
 
-#define W5500_PHY_RESET_WAIT_US     1000
-#define W5500_PHY_POLL_WAIT_US      10000
-#define W5500_LINK_WAIT_MS          3000
+#define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
 
 //****************************************************************************
 // Global variables
@@ -131,6 +129,35 @@ static void *find_tcpip(void)
 
 int set_ifenable(bool enable)
 {
+    if (ifenable == enable) {
+        return 0;
+    }
+
+    if (enable) {
+        if (wifi_ssid[0] == '\0') {
+            return -1;
+        }
+
+        do_wifi_join(wifi_ssid, wifi_passwd, -1);
+
+        int t = 0;
+        while (t < WIFI_JOIN_TIMEOUT) {
+            int stat = do_wifi_getstat();
+            if (stat & W5500_WSR_JOINED) {
+                break;
+            } else if (stat & W5500_WSR_ERR) {
+                return -1;
+            }
+            usleep(500 * 1000);
+            t += 500;
+        }
+        if (t >= WIFI_JOIN_TIMEOUT) {
+            return -1;
+        }
+    } else {
+        do_wifi_leave();
+    }
+
     ifenable = enable;
     return 0;
 }
@@ -270,6 +297,8 @@ int main(int argc, char **argv)
             return 1;
         }
 
+        do_wifi_leave();
+
 #if 0
         w5500_ini();
         w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
@@ -320,6 +349,8 @@ int main(int argc, char **argv)
 
     w5500_ini();
 
+    do_wifi_leave();
+
 #if 0
     w5500_write_b(W5500_MR, 0, 0x80);   // ソフトウェアリセット
     usleep(W5500_PHY_RESET_WAIT_US);
@@ -331,7 +362,6 @@ int main(int argc, char **argv)
 
     init_etc_files();
     set_config();
-    set_ifenable(ifenable);
 
 #if 0
     if (dhcp_mode) {
@@ -347,24 +377,17 @@ int main(int argc, char **argv)
 
     if (wifi_ssid[0] != '\0') {
         _dos_print("WiFiに接続しています...\r\n");
-        do_wifi_join(wifi_ssid, wifi_passwd, -1);
 
-        int i = 0;
-        for (i = 0; i < 100; i++) {
-            if (do_wifi_getstat() & W5500_WSR_JOINED) {
-                _dos_print("WiFiに接続しました\r\n");
-                break;
-            }
-            usleep(100 * 1000);
-        }
-        if (i >= 100) {
+        if (set_ifenable(true) < 0) {
             _dos_print("WiFiへの接続に失敗しました\r\n");
+        } else {
+            _dos_print("WiFiに接続しました\r\n");
+            do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
+            show_config(-1);
         }
-
-        do_dns_add(ntohl(w5500_read_l(W5500_WDNSR, 0)));
+    } else {
+        _dos_print("SSIDが設定されていません\r\n");
     }
-
-    show_config(-1);
 
     if (trap_number < -1) {    // 未使用のtrap番号を探す
         for (trap_number = 0; trap_number < 8; trap_number++) {
