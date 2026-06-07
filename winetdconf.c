@@ -120,18 +120,39 @@ char *getpass(const char *prompt)
 // Command functions
 //****************************************************************************
 
+static char *mactoa(const uint8_t *mac)
+{
+    static char buf[18];
+    sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return buf;
+}
+
 static int do_show_stat(void)
 {
-    printf("RSSI=%ddBm\n", -wifi_getrssi());
+    char buf[80];
+    struct route *rt;
+    struct dns *dns;
 
-    iface *wif = wifi_get_iface();
+    iface *wif = wifi_get_iface(&rt, &dns);
 
-    printf("Interface: %s\n", wif->name);
-    printf("Status: %s\n", wif->flag & IFACE_UP ? "up" : "down");
+    printf("Interface : %s\t\t\tMAC addr: %s\n", wif->name, mactoa((uint8_t *)wif->my_hw_addr));
+    printf("Status  : %s\n", wif->flag & IFACE_UP ? "UP" : "DOWN");
+
     if (wif->flag & IFACE_UP) {
-        printf("IP addr : %s\n", inet_ntoa(*(struct in_addr *)&wif->my_ip_addr));
-        printf("Netmask : %s\n", inet_ntoa(*(struct in_addr *)&wif->net_mask));
-        printf("Broadcast : %s\n", inet_ntoa(*(struct in_addr *)&wif->broad_cast));
+        printf("RSSI    : %ddBm\n", -wifi_getrssi());
+
+        sprintf(buf, "IP addr : %s", inet_ntoa(*(struct in_addr *)&wif->my_ip_addr));
+        printf("%-32s", buf);
+        sprintf(buf, "Netmask : %s", inet_ntoa(*(struct in_addr *)&wif->net_mask));
+        printf("%-32s", buf);
+        printf("\n");
+
+        sprintf(buf, "Gateway : %s", inet_ntoa(*(struct in_addr *)&rt->gateway));
+        printf("%-32s", buf);
+        sprintf(buf, "DNS     : %s", inet_ntoa(*(struct in_addr *)&dns->address));
+        printf("%-32s", buf);
+        printf("\n");
     }
 
     return 0;
