@@ -95,9 +95,6 @@ typedef struct usock
 // Global variables
 //****************************************************************************
 
-#define ARPSIZE 17
-void *dummy_arp_table[ARPSIZE];
-
 struct mib_array dummy_mib_array[4] = {
     { NULL, 0, "IP" },
     { NULL, 0, "ICMP" },
@@ -1163,15 +1160,19 @@ int do_command(void)
         break;
 
     case _TI_add_arp_table:
+        res = do_add_arp_table(arg[0], (char *)arg[1]);
+        break;
     case _TI_del_arp_table:
+        res = do_del_arp_table((long)arg);
+        break;
     case _TI_search_arp_table:
-        res = 0;
+        res = (int)do_search_arp_table((long)arg);
         break;
     case _TI_get_arp_table_top:
-        res = (int)&dummy_arp_table;
+        res = (int)do_get_arp_table_top();
         break;
     case _TI_arp_request:
-        res = 0;
+        res = do_arp_request((long)arg);
         break;
 
     case _TI_get_iface_list:
