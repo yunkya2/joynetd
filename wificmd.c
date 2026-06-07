@@ -157,6 +157,20 @@ int do_wifi_dhcpmode(int enable)
     return 0;
 }
 
+struct iface *do_wifi_get_iface(struct route **rt, struct dns **dns)
+{
+    struct iface *iface = do_get_iface_list();
+
+    if (rt) {
+        *rt = do_rt_lookup(0);
+    }
+    if (dns) {
+        *dns = do_dns_get();
+    }
+
+    return iface;
+}
+
 int do_wifi_get_winetd_config(wifi_winetd_config_t *config)
 {
     config->trap_number = trap_number;

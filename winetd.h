@@ -98,6 +98,7 @@ int do_wifi_scanresult(int sockfd, void *buf, size_t len);
 int do_wifi_join(char *ssid, char *password, long auth);
 int do_wifi_leave(void);
 int do_wifi_dhcpmode(int enable);
+struct iface *do_wifi_get_iface(struct route **rt, struct dns **dns);
 int do_wifi_get_winetd_config(wifi_winetd_config_t *config);
 
 // inetiface.c

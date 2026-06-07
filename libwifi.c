@@ -149,12 +149,22 @@ int wifi_leave(void)
 }
 
 // wifi_get_iface() - WiFi interfaceの情報を取得する
-// in:  なし
+// in:  rt       - ルーティング情報を返すroute構造体へのポインタ
+//      dns      - DNS情報を返すdns構造体へのポインタ
 // out: iface *
 
-iface *wifi_get_iface(void)
+iface *wifi_get_iface(struct route **rt, struct dns **dns)
 {
-    return (iface *)__sock_func(_TI_get_iface_list, NULL);
+    if (!__sock_func) {
+        errno = ENOSYS;
+        return NULL;
+    }
+
+    long arg[2];
+    arg[0] = (long)rt;
+    arg[1] = (long)dns;
+
+    return (iface *)__sock_func(WTI_GET_IFACE, arg);
 }
 
 // wifi_get_winetd_config() - winetd.xの設定を取得する
@@ -163,6 +173,7 @@ iface *wifi_get_iface(void)
 
 int wifi_get_winetd_config(wifi_winetd_config_t *config)
 {
+    check_sock_func();
     __sock_func(WTI_GET_WINETD_CONFIG, (long *)config);
     return 0;
 }

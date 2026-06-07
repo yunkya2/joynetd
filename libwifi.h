@@ -54,6 +54,9 @@ typedef struct wifi_winetd_config {
     char *hostname;
 } wifi_winetd_config_t;
 
+struct route;
+struct dns;
+
 //****************************************************************************
 // Public functions
 //****************************************************************************
@@ -106,10 +109,11 @@ int wifi_join(char *ssid, char *password, uint32_t auth);
 int wifi_leave(void);
 
 // wifi_get_iface() - WiFi interfaceの情報を取得する
-// in:  なし
+// in:  rt       - ルーティング情報を返すroute構造体へのポインタ
+//      dns      - DNS情報を返すdns構造体へのポインタ
 // out: iface *
 
-iface *wifi_get_iface(void);
+iface *wifi_get_iface(struct route **rt, struct dns **dns);
 
 // wifi_get_winetd_config() - winetd.xの設定を取得する
 // in:  wifi_winetd_config_t *
