@@ -146,13 +146,19 @@ int set_ifenable(bool enable)
             if (stat & W5500_WSR_JOINED) {
                 break;
             } else if (stat & W5500_WSR_ERR) {
-                return -1;
+                if (stat & W5500_WSR_NONET) {
+                    return -2;
+                } else if (stat & W5500_WSR_BADAUTH) {
+                    return -3;
+                } else {
+                    return -4;
+                }
             }
             usleep(500 * 1000);
             t += 500;
         }
         if (t >= WIFI_JOIN_TIMEOUT) {
-            return -1;
+            return -5;
         }
     } else {
         do_wifi_leave();

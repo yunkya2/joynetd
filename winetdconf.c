@@ -344,9 +344,15 @@ static int do_wifi_join(int argc, char **argv)
     if (stat & W5500_WSR_JOINED) {
         printf("WiFiに接続しました\n");
     } else if (stat & W5500_WSR_ERR) {
-        printf("WiFiへの接続に失敗しました\n");
+        if (stat & W5500_WSR_NONET) {
+            printf("アクセスポイントが見つかりません\n");
+        } else if (stat & W5500_WSR_BADAUTH) {
+            printf("パスワードが間違っています\n");
+        } else {
+            printf("WiFiへの接続に失敗しました\n");
+        }
     } else if (t >= WIFI_JOIN_TIMEOUT) {
-        printf("WiFiへの接続に失敗しました (timeout)\n");
+        printf("WiFiへの接続にタイムアウトしました\n");
     }
     return 0;
 }

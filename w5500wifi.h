@@ -51,8 +51,10 @@
 
 // WiFi Status Register bit definitions (W5500_WSR)
 #define W5500_WSR_JOINED        0x01    // WiFiネットワークに参加中
-#define W5500_WSR_NODHCP        0x20    // WiFi接続時のDCPクライアント機能を使用しない
-#define W5500_WSR_SCANNING      0x40    // WiFiのscan処理中
+#define W5500_WSR_SCANNING      0x02    // WiFiのscan処理中
+#define W5500_WSR_NODHCP        0x04    // WiFi接続時のDCPクライアント機能を使用しない
+#define W5500_WSR_NONET         0x20    // 指定したSSIDのアクセスポイントが見つからない
+#define W5500_WSR_BADAUTH       0x40    // アクセスポイントの認証エラー
 #define W5500_WSR_ERR           0x80    // コマンド処理中にエラーが発生した
 
 #endif /* _W5500WIFI_H_ */
