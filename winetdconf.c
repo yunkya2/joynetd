@@ -162,11 +162,10 @@ static char *get_default_cfgfile(char *buf)
     return buf;
 }
 
-static int create_config(const char *cfgfile)
+static int check_config(const char *cfgfile)
 {
     char cfgdefault[256];
     FILE *fp;
-    wifi_winetd_config_t config;
 
     if (cfgfile == NULL || *cfgfile == '\0') {
         cfgfile = get_default_cfgfile(cfgdefault);
@@ -177,13 +176,25 @@ static int create_config(const char *cfgfile)
         fclose(fp);
         return -1;
     }
+    return 0;
+}
+
+static int create_config(const char *cfgfile)
+{
+    char cfgdefault[256];
+    FILE *fp;
+    wifi_winetd_config_t config;
+
+    if (cfgfile == NULL || *cfgfile == '\0') {
+        cfgfile = get_default_cfgfile(cfgdefault);
+    }
 
     wifi_get_winetd_config(&config);
 
     if ((fp = fopen(cfgfile, "w")) == NULL) {
         printf("設定ファイル %s の生成に失敗しました\n", cfgfile);
         return -1;
-        } else {
+    } else {
         fprintf(fp, winetd_cfg_tmpl,
             config.trap_number == NOSPEC_INT ? ";" : "",
             config.trap_number == NOSPEC_INT ? DEFAULT_TRAP : config.trap_number,
@@ -342,6 +353,12 @@ static int do_wifi_join(int argc, char **argv)
             ssid = argv[i];
         } else if (passwd == NULL) {
             passwd = argv[i];
+        }
+    }
+
+    if (createconfig) {
+        if (check_config(confpath) < 0) {
+            return -1;
         }
     }
 
