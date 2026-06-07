@@ -58,8 +58,8 @@ struct winetd_data {
 
 #define WINET_MAGIC     0x57694e01  // "WiN\1"
 
-#define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
-#define WIFI_JOIN_RETRY     5       // WiFi接続のリトライ回数
+#define WIFI_JOIN_TIMEOUT   10000   // WiFi接続のタイムアウト時間（ms）
+#define WIFI_JOIN_RETRY     8       // WiFi接続のリトライ回数
 
 //****************************************************************************
 // Global variables

@@ -55,8 +55,8 @@
 #define WIFI_PASSWORD ""
 #endif
 
-#define WIFI_JOIN_TIMEOUT   30000   // WiFi接続のタイムアウト時間（ms）
-#define WIFI_JOIN_RETRY     5       // WiFi接続のリトライ回数
+#define WIFI_JOIN_TIMEOUT   10000   // WiFi接続のタイムアウト時間（ms）
+#define WIFI_JOIN_RETRY     8       // WiFi接続のリトライ回数
 
 // TBD
 #define NOSPEC_INT      -99999
