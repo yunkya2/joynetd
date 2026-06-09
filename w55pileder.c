@@ -123,7 +123,7 @@ void w5500_read(uint16_t addr, uint8_t block, uint8_t *data, size_t len)
         "move.w  %2,%%d0\n"
         "movea.l %3,%%a2\n"
 
-        "move.w  %%a0,%%d1\n"
+        "move.w  %%a1,%%d1\n"
         "btst    #0,%%d1\n"
         "bne.s   4f\n"
 
