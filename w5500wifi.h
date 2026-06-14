@@ -29,6 +29,9 @@
 // Additional WiFi Register Definitions
 //****************************************************************************
 
+// Socket n Mode bits (W5500_Sn_MR)
+#define W5500_Sn_MR_TCPTLS      0x09
+
 #define W5500_WIDENT        0x0040  // WiFi System Identifier
 #define W5500_WVERSION      0x0048  // WiFi System Version
 #define W5500_WCR           0x0050  // WiFi Control

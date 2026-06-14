@@ -45,12 +45,17 @@
 // Macros and definitions
 //****************************************************************************
 
+#ifndef SOCK_STREAM_TLS
+#define SOCK_STREAM_TLS     (SOCK_STREAM + 8)
+#endif
+
 #define NOTUSED             0
 #define TYPE_TCP            1
 #define TYPE_UDP            2
 #define TYPE_RAW            3
 #define TYPE_LOCAL_STREAM   4
 #define TYPE_LOCAL_DGRAM    5
+#define TYPE_TCP_TLS        8
 
 #define	SOCK_BINARY	0	/* socket in raw (binary) mode */
 #define	SOCK_ASCII	1	/* socket in cooked (newline mapping) mode */
@@ -298,6 +303,11 @@ int do_socket(int domain, int type, int protocol)
                 socket_mode = W5500_Sn_MR_TCP;
                 socket_stat = W5500_Sn_SR_INIT;
                 break;
+            case SOCK_STREAM_TLS:
+                socket_type = TYPE_TCP_TLS;
+                socket_mode = W5500_Sn_MR_TCPTLS;
+                socket_stat = W5500_Sn_SR_INIT;
+                break;
             case SOCK_DGRAM:
                 socket_type = TYPE_UDP;
                 socket_mode = W5500_Sn_MR_UDP;
@@ -357,6 +367,7 @@ int do_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     switch (u->type) {
     case TYPE_TCP:
+    case TYPE_TCP_TLS:
     case TYPE_UDP:
     case TYPE_RAW:
         break;
@@ -393,6 +404,7 @@ int do_listen(int sockfd, int backlog)
 
     switch (u->type) {
     case TYPE_TCP:
+    case TYPE_TCP_TLS:
         break;
     case TYPE_UDP:
     case TYPE_RAW:
@@ -427,6 +439,7 @@ int do_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 
     switch (u->type) {
     case TYPE_TCP:
+    case TYPE_TCP_TLS:
         break;
     case TYPE_UDP:
     case TYPE_RAW:
@@ -491,6 +504,7 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     switch (u->type) {
     case TYPE_TCP:
+    case TYPE_TCP_TLS:
     case TYPE_UDP:
     case TYPE_RAW:
         break;
@@ -504,7 +518,7 @@ int do_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     w5500_write_l(W5500_Sn_DIPR, blk_sreg, ntohl(sin->sin_addr.s_addr));
     w5500_write_w(W5500_Sn_DPORT, blk_sreg, ntohs(sin->sin_port));
 
-    if (u->type != TYPE_TCP) {
+    if (u->type != TYPE_TCP && u->type != TYPE_TCP_TLS) {
         if (u->type == TYPE_UDP && !u->rdysock) {
             // UDPの送信先が決まったのでephemeral portを使ってopenする
             // (ローカルポート番号はすでにsocket()で設定済み)
@@ -570,6 +584,7 @@ ssize_t do_recvfrom(int sockfd, void *buf, size_t len,
 
     switch (u->type) {
     case TYPE_TCP:
+    case TYPE_TCP_TLS:
         socket_stat = W5500_Sn_SR_ESTABLISHED;
         packet_info_size = 0;
         packet_info_len = NULL;
@@ -651,6 +666,7 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
 
     switch (u->type) {
     case TYPE_TCP:
+    case TYPE_TCP_TLS:
         socket_stat = W5500_Sn_SR_ESTABLISHED;
         dest_addr = NULL;   // アドレス指定は無視する
         addrlen = 0;
@@ -681,7 +697,7 @@ ssize_t do_sendto(int sockfd, const void *buf, size_t len,
         }
     }
 
-    if (u->type == TYPE_TCP) {
+    if (u->type == TYPE_TCP || u->type == TYPE_TCP_TLS) {
         ssize_t written = 0;
         while (len > 0) {
             PRINTF("  Sn_TX_FSR=");
@@ -841,7 +857,7 @@ int do_socklen(int sockfd, int mode)
         return -1;
     }
 
-    if (len == 0 && u->type == TYPE_TCP && sr != W5500_Sn_SR_ESTABLISHED) {
+    if (len == 0 && (u->type == TYPE_TCP || u->type == TYPE_TCP_TLS) && sr != W5500_Sn_SR_ESTABLISHED) {
         PRINTF("socket not in ESTABLISHED state\n");
         errno = EINVAL;
         return -1;
@@ -918,7 +934,7 @@ int do_shutdown(int sockfd, int how)
     int blk_sreg = sno * 4 + 1;
     usock *u = &usock_array[sockfd - SOCKBASE];
 
-    if (u->type == TYPE_TCP) {
+    if (u->type == TYPE_TCP || u->type == TYPE_TCP_TLS) {
         w5500_write_b(W5500_Sn_CR, blk_sreg, W5500_Sn_CR_DISCON);
     }
 
